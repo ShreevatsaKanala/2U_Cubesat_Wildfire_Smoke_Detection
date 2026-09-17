@@ -145,11 +145,50 @@ cd backend
 python -m pytest tests/ -v
 ```
 
-62 tests (5 skipped if torch not installed) covering:
+88 tests (5 skipped if torch not installed) covering:
 - Model validation, orbit propagation, ML classification, priority calculation
 - API endpoints (health, config, spacecraft, observations, events, ground station, downlink, faults, simulation, environment)
 - ML pipeline (preprocessing, postprocessing, metrics, model registry, classifier integration)
+- AI vision providers (mock, OpenRouter, Groq, preprocessing, service, failover, rate limiting)
 - External adapters
+
+## AI Vision Pipeline
+
+Phase 4 integrates live external vision AI for smoke detection:
+
+```bash
+# Mock mode (no API key needed)
+AI_MODE=mock
+
+# Live mode with OpenRouter
+AI_MODE=live
+AI_PROVIDER=openrouter
+OPENROUTER_API_KEY=sk-or-v1-...
+
+# Live mode with Groq
+AI_MODE=live
+AI_PROVIDER=groq
+GROQ_API_KEY=gsk_...
+
+# Failover (OpenRouter primary, Groq fallback)
+AI_MODE=live
+AI_PROVIDER=openrouter
+AI_FAILOVER_ENABLED=true
+```
+
+### AI Smoke Score
+
+The external vision AI returns an **AI Smoke Score** (0-1). This is NOT a calibrated probability of wildfire. It is an AI-generated assessment used for mission decision support.
+
+### Architecture
+
+```
+Camera → RGB Image → Preprocessing → Base64 → Vision AI Provider
+    → Structured JSON → Pydantic Validation → AI Smoke Score
+    → Priority Calculator → Observation → Downlink Queue → Dashboard
+```
+
+Providers: OpenRouter (primary) → Groq (failover) → Mock (offline)
 
 ## ML Pipeline
 
@@ -189,7 +228,7 @@ Set `ML_MODE=real` in `.env` to use trained model. Default is `ML_MODE=mock`.
 
 ## Digital Twin Domains
 
-Phase 3 adds real ML inference pipeline:
+Phase 4 adds live external vision AI:
 
 1. **Mission/Orbit** — SGP4 propagation with configurable orbital parameters
 2. **Spacecraft State** — Full state vector with power, thermal, attitude
@@ -197,7 +236,7 @@ Phase 3 adds real ML inference pipeline:
 4. **Thermal Subsystem** — Multi-node thermal with safe range tracking
 5. **ADCS** — NADIR, SUN_SYNC, INERTIAL attitude modes
 6. **Camera/Payload** — Synthetic image generation with terrain simulation
-7. **AI/ML Inference** — Pluggable interface: MockClassifier + RealSmokeClassifier
+7. **AI Vision Pipeline** — Live external vision AI (OpenRouter/Groq) with failover
 8. **ML Pipeline** — Preprocessing, training, evaluation, threshold calibration, ONNX export
 9. **Mission Decision Logic** — Weighted priority calculation (CRITICAL/HIGH/MEDIUM/LOW)
 10. **Fault Management** — Inject/clear battery, camera, ADCS, comms, eclipse faults
@@ -210,6 +249,7 @@ Phase 3 adds real ML inference pipeline:
 ## Roadmap
 
 - [x] Replace mock classifier with real lightweight CNN/MobileNet/ONNX model
+- [x] Integrate live external vision AI (OpenRouter/Groq)
 - [ ] Add real TLE loading from CelesTrak
 - [ ] SQLite/PostgreSQL persistence layer
 - [ ] Observation image downlink simulation

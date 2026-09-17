@@ -36,5 +36,11 @@ class TelemetryPacket(BaseModel):
     smoke_probability: Optional[float] = None
     confidence: Optional[float] = None
     priority: Optional[str] = None
+    ai_status: Optional[str] = None
+    ai_provider: Optional[str] = None
+    ai_model: Optional[str] = None
+    ai_smoke_score: Optional[float] = None
+    ai_confidence: Optional[str] = None
+    ai_latency_ms: Optional[float] = None
     health_status: str = "NOMINAL"
     events: list = Field(default_factory=list)

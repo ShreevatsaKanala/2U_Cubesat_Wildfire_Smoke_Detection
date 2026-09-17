@@ -14,8 +14,9 @@ from app.api.v1 import (
     environment, spacecraft, events, ground_station,
     downlink, faults
 )
+from app.api.v1.ai_status import router as ai_status_router
 
-engine = SimulationEngine(sim_config={"ml_mode": settings.ML_MODE})
+engine = SimulationEngine(sim_config={"ml_mode": settings.ML_MODE, "ai_mode": settings.AI_MODE})
 telemetry_service = TelemetryService()
 
 connected_clients: set = set()
@@ -84,6 +85,7 @@ app.include_router(events.router)
 app.include_router(ground_station.router)
 app.include_router(downlink.router)
 app.include_router(faults.router)
+app.include_router(ai_status_router)
 
 data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 if os.path.exists(data_dir):

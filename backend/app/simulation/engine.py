@@ -38,7 +38,17 @@ class SimulationEngine:
         
         # ML / Camera
         self._ml_mode = sim_config.get("ml_mode", "mock")
+        self._ai_mode = sim_config.get("ai_mode", "mock")
         self.classifier = self._create_classifier()
+        self._ai_service = None
+        if self._ai_mode == "live":
+            try:
+                from app.ai.service import AIService
+                from app.core.config import settings
+                self._ai_service = AIService(settings)
+            except Exception as e:
+                logger.error(f"Failed to init AIService: {e}. Falling back to mock classifier.")
+                self._ai_mode = "mock"
         self.camera = CameraSimulator(sim_config.get("camera", {}))
         self.observation_service = ObservationService()
         self.priority_calculator = PriorityCalculator()
@@ -365,8 +375,60 @@ class SimulationEngine:
         self._state.camera_status = "standby"
         
         self._state.ml_status = "processing"
+        ai_fields = {}
         try:
-            cls_result = self.classifier.classify(capture["image_path"])
+            if self._ai_mode == "live" and self._ai_service:
+                self._add_event(
+                    EventType.AI_INFERENCE_STARTED,
+                    f"Live AI inference started for {observation_id}",
+                    "info",
+                )
+                ai_result = self._ai_service.analyze_observation(
+                    capture["image_path"],
+                    {
+                        "observation_id": observation_id,
+                        "latitude": self._state.latitude,
+                        "longitude": self._state.longitude,
+                        "altitude_km": self._state.altitude_km,
+                    },
+                )
+                confidence_map = {"low": 0.3, "medium": 0.6, "high": 0.9}
+                cls_result = {
+                    "smoke_probability": ai_result.smoke_score,
+                    "wildfire_probability": ai_result.smoke_score * 0.8,
+                    "confidence": confidence_map.get(ai_result.confidence, 0.5),
+                    "model_name": ai_result.ai_provider,
+                    "model_version": ai_result.ai_model,
+                    "inference_latency_ms": ai_result.ai_latency_ms,
+                    "processing_status": ai_result.ai_status,
+                }
+                self._state.ml_status = "live" if ai_result.ai_status == "success" else "error"
+                if ai_result.ai_status == "success":
+                    self._add_event(
+                        EventType.AI_INFERENCE_COMPLETED,
+                        f"Live AI inference completed for {observation_id}: "
+                        f"smoke_score={ai_result.smoke_score:.3f}",
+                        "info",
+                    )
+                else:
+                    self._add_event(
+                        EventType.AI_INFERENCE_FAILED,
+                        f"Live AI inference failed for {observation_id}: {ai_result.ai_error}",
+                        "warning",
+                    )
+                ai_fields = {
+                    "ai_provider": ai_result.ai_provider,
+                    "ai_model": ai_result.ai_model,
+                    "ai_smoke_score": ai_result.smoke_score,
+                    "ai_confidence": ai_result.confidence,
+                    "ai_visual_evidence": ai_result.visual_evidence,
+                    "ai_alternative_explanations": ai_result.alternative_explanations,
+                    "ai_scene_description": ai_result.scene_description,
+                    "ai_status": ai_result.ai_status,
+                }
+            else:
+                cls_result = self.classifier.classify(capture["image_path"])
+                ai_fields = {}
         except Exception as e:
             logger.error(f"ML classification failed: {e}")
             cls_result = {
@@ -380,7 +442,7 @@ class SimulationEngine:
             }
             self._state.ml_status = "error"
         else:
-            self._state.ml_status = "real" if self._ml_mode == "real" else "mock"
+            self._state.ml_status = "real" if self._ml_mode == "real" else "mock" if self._ai_mode != "live" else self._state.ml_status
         self._add_event(EventType.ML_RESULT_READY,
                        f"ML result for {observation_id}: smoke={cls_result['smoke_probability']:.3f}", "info")
         
@@ -408,6 +470,7 @@ class SimulationEngine:
             priority=priority,
             inference_latency_ms=cls_result["inference_latency_ms"],
             processing_status="completed",
+            **ai_fields,
             spacecraft_state_snapshot=self._state.model_dump(mode="json"),
         )
         
@@ -417,6 +480,13 @@ class SimulationEngine:
         self._state.smoke_probability = cls_result["smoke_probability"]
         self._state.confidence = cls_result["confidence"]
         self._state.priority = priority
+        if ai_fields:
+            self._state.ai_status = ai_fields.get("ai_status")
+            self._state.ai_provider = ai_fields.get("ai_provider")
+            self._state.ai_model = ai_fields.get("ai_model")
+            self._state.ai_smoke_score = ai_fields.get("ai_smoke_score")
+            self._state.ai_confidence = ai_fields.get("ai_confidence")
+            self._state.ai_latency_ms = cls_result["inference_latency_ms"]
         self._add_event(EventType.OBSERVATION_COMPLETED,
                        f"Observation {observation_id} completed - Priority: {priority}", "info")
         self._add_event(EventType.PRIORITY_CHANGED,
@@ -493,6 +563,12 @@ class SimulationEngine:
             smoke_probability=t.smoke_probability,
             confidence=t.confidence,
             priority=t.priority,
+            ai_status=t.ai_status,
+            ai_provider=t.ai_provider,
+            ai_model=t.ai_model,
+            ai_smoke_score=t.ai_smoke_score,
+            ai_confidence=t.ai_confidence,
+            ai_latency_ms=t.ai_latency_ms,
             health_status=t.health.overall_health().value,
             events=[e.model_dump(mode="json") for e in recent_events],
         )

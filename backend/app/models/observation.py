@@ -25,4 +25,12 @@ class Observation(BaseModel):
     processing_status: str = "completed"
     verification_status: str = "unverified"
     downlink_status: str = "pending"
+    ai_provider: Optional[str] = None
+    ai_model: Optional[str] = None
+    ai_smoke_score: Optional[float] = None
+    ai_confidence: Optional[str] = None
+    ai_visual_evidence: Optional[list] = None
+    ai_alternative_explanations: Optional[list] = None
+    ai_scene_description: Optional[str] = None
+    ai_status: Optional[str] = None
     spacecraft_state_snapshot: Optional[dict] = None

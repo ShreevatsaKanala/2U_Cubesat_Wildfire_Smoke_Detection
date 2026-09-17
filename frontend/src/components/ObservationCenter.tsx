@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { useMissionStore } from "@/stores/telemetryStore";
 import { fetchObservations } from "@/lib/api";
-import { Eye, ChevronLeft, ChevronRight } from "lucide-react";
+import { Eye, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
 
 const priorityColors: Record<string, string> = {
   LOW: "text-slate-400",
@@ -16,6 +16,8 @@ export default function ObservationCenter() {
   const setObservations = useMissionStore((s) => s.setObservations);
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
+  const [showEvidence, setShowEvidence] = useState(false);
+  const [showAlternatives, setShowAlternatives] = useState(false);
   const limit = 10;
 
   useEffect(() => {
@@ -28,6 +30,7 @@ export default function ObservationCenter() {
   }, [page, setObservations]);
 
   const totalPages = Math.ceil(total / limit);
+  const hasAIFields = obs && obs.ai_provider;
 
   return (
     <div className="panel space-y-3">
@@ -48,19 +51,96 @@ export default function ObservationCenter() {
               <img src={`http://localhost:8000/${obs.image_path}`} alt="Observation" className="w-full h-28 object-cover rounded" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
             </div>
           )}
+          {hasAIFields && (
+            <div className="flex gap-1.5">
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-900/40 border border-blue-700 text-blue-400">
+                AI VISION
+              </span>
+              {obs.ai_provider && (
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300">
+                  {obs.ai_provider}
+                </span>
+              )}
+              {obs.ai_model && (
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400">
+                  {obs.ai_model}
+                </span>
+              )}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-1 text-[11px]">
-            <div><span className="text-slate-500">Smoke:</span> <span className="font-mono text-slate-200">{obs.smoke_probability?.toFixed(3) ?? "—"}</span></div>
-            <div><span className="text-slate-500">Confidence:</span> <span className="font-mono text-slate-200">{obs.confidence?.toFixed(3) ?? "—"}</span></div>
+            {hasAIFields && obs.ai_smoke_score !== null && obs.ai_smoke_score !== undefined ? (
+              <>
+                <div><span className="text-slate-500">AI Smoke:</span> <span className={`font-mono font-bold ${obs.ai_smoke_score > 0.6 ? "text-mission-danger" : "text-slate-200"}`}>{obs.ai_smoke_score?.toFixed(3) ?? "—"}</span></div>
+                <div><span className="text-slate-500">Confidence:</span> <span className="font-mono text-slate-200">{obs.ai_confidence ?? "—"}</span></div>
+              </>
+            ) : (
+              <>
+                <div><span className="text-slate-500">Smoke:</span> <span className="font-mono text-slate-200">{obs.smoke_probability?.toFixed(3) ?? "—"}</span></div>
+                <div><span className="text-slate-500">Confidence:</span> <span className="font-mono text-slate-200">{obs.confidence?.toFixed(3) ?? "—"}</span></div>
+              </>
+            )}
             <div><span className="text-slate-500">Priority:</span> <span className={`font-bold ${priorityColors[obs.priority] || "text-slate-200"}`}>{obs.priority}</span></div>
             <div>
               <span className="text-slate-500">Model:</span>{" "}
               <span className="font-mono text-slate-200">{obs.model_name}</span>
               {obs.model_version && <span className="font-mono text-slate-400 ml-1">v{obs.model_version}</span>}
             </div>
-            <div><span className="text-slate-500">Latency:</span> <span className="font-mono text-slate-200">{obs.inference_latency_ms?.toFixed(0) ?? "—"} ms</span></div>
+            {hasAIFields && obs.inference_latency_ms !== null && obs.inference_latency_ms !== undefined ? (
+              <div><span className="text-slate-500">AI Latency:</span> <span className="font-mono text-slate-200">{obs.inference_latency_ms?.toFixed(0) ?? "—"} ms</span></div>
+            ) : (
+              <div><span className="text-slate-500">Latency:</span> <span className="font-mono text-slate-200">{obs.inference_latency_ms?.toFixed(0) ?? "—"} ms</span></div>
+            )}
             <div><span className="text-slate-500">Status:</span> <span className="font-mono text-slate-200">{obs.processing_status}</span></div>
           </div>
-          {obs.model_name && (
+          {hasAIFields && obs.ai_scene_description && (
+            <div className="text-[10px] text-slate-400 italic bg-mission-dark rounded p-1.5">
+              {obs.ai_scene_description}
+            </div>
+          )}
+          {hasAIFields && obs.ai_visual_evidence && obs.ai_visual_evidence.length > 0 && (
+            <div className="text-[11px]">
+              <button
+                onClick={() => setShowEvidence(!showEvidence)}
+                className="flex items-center gap-1 text-slate-400 hover:text-slate-200"
+              >
+                {showEvidence ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+                Visual Evidence ({obs.ai_visual_evidence.length})
+              </button>
+              {showEvidence && (
+                <ul className="mt-1 ml-3 space-y-0.5 text-[10px] text-slate-300">
+                  {obs.ai_visual_evidence.map((e: string, i: number) => (
+                    <li key={i} className="list-disc">{e}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          {hasAIFields && obs.ai_alternative_explanations && obs.ai_alternative_explanations.length > 0 && (
+            <div className="text-[11px]">
+              <button
+                onClick={() => setShowAlternatives(!showAlternatives)}
+                className="flex items-center gap-1 text-slate-400 hover:text-slate-200"
+              >
+                {showAlternatives ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+                Alternatives ({obs.ai_alternative_explanations.length})
+              </button>
+              {showAlternatives && (
+                <ul className="mt-1 ml-3 space-y-0.5 text-[10px] text-slate-300">
+                  {obs.ai_alternative_explanations.map((e: string, i: number) => (
+                    <li key={i} className="list-disc">{e}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          {hasAIFields && (obs.ai_status === "error" || obs.ai_status === "unavailable") && (
+            <div className="flex items-center gap-1.5 text-[11px] p-1.5 rounded bg-yellow-900/30 border border-yellow-800 text-yellow-300">
+              <AlertTriangle size={12} />
+              AI inference {obs.ai_status}
+            </div>
+          )}
+          {!hasAIFields && obs.model_name && (
             <div className="flex gap-1.5">
               {obs.model_name.toLowerCase().includes("mock") ? (
                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-yellow-900/40 border border-yellow-700 text-yellow-400">

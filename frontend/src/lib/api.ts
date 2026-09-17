@@ -150,6 +150,14 @@ export async function fetchObservations(limit = 20, offset = 0) {
       model_version: string | null;
       inference_latency_ms: number | null;
       processing_status: string;
+      ai_provider: string | null;
+      ai_model: string | null;
+      ai_smoke_score: number | null;
+      ai_confidence: string | null;
+      ai_visual_evidence: string[] | null;
+      ai_alternative_explanations: string[] | null;
+      ai_scene_description: string | null;
+      ai_status: string | null;
     }[];
     total: number;
     limit: number;
@@ -181,6 +189,18 @@ export async function fetchAirQuality(lat: number, lon: number) {
 
 export async function fetchHotspots() {
   return get<{ lat: number; lon: number; frp: number; confidence: string }[]>("/api/v1/environment/hotspots");
+}
+
+export async function fetchAIStatus() {
+  return get<{
+    mode: string;
+    provider: string;
+    model: string;
+    failover_enabled: boolean;
+    timeout_seconds: number;
+    max_requests_per_minute: number;
+    status: string;
+  }>("/api/ai/status");
 }
 
 export async function fetchMLStatus() {

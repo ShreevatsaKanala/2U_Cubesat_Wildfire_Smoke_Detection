@@ -71,6 +71,12 @@ export interface SpacecraftTelemetry {
   smoke_probability: number | null;
   confidence: number | null;
   priority: string | null;
+  ai_status: string | null;
+  ai_provider: string | null;
+  ai_model: string | null;
+  ai_smoke_score: number | null;
+  ai_confidence: string | null;
+  ai_latency_ms: number | null;
 }
 
 export interface Observation {
@@ -88,6 +94,14 @@ export interface Observation {
   model_version: string | null;
   inference_latency_ms: number | null;
   processing_status: string;
+  ai_provider: string | null;
+  ai_model: string | null;
+  ai_smoke_score: number | null;
+  ai_confidence: string | null;
+  ai_visual_evidence: string[] | null;
+  ai_alternative_explanations: string[] | null;
+  ai_scene_description: string | null;
+  ai_status: string | null;
 }
 
 export interface MissionEvent {
@@ -166,6 +180,28 @@ export interface DatasetStats {
   dimensions: { width: number; height: number; channels: number };
 }
 
+export interface AIStatus {
+  mode: string;
+  provider: string;
+  model: string;
+  failoverEnabled: boolean;
+  timeoutSeconds: number;
+  maxRequestsPerMinute: number;
+  status: string;
+}
+
+export interface AILiveResult {
+  aiProvider: string | null;
+  aiModel: string | null;
+  aiSmokeScore: number | null;
+  aiConfidence: string | null;
+  aiVisualEvidence: string[];
+  aiAlternativeExplanations: string[];
+  aiSceneDescription: string;
+  aiStatus: string | null;
+  aiLatencyMs: number | null;
+}
+
 interface MissionState {
   telemetry: SpacecraftTelemetry | null;
   telemetryHistory: SpacecraftTelemetry[];
@@ -188,6 +224,8 @@ interface MissionState {
   mlModels: MLModelInfo[];
   datasetManifest: DatasetManifest | null;
   datasetStats: DatasetStats | null;
+  aiStatus: AIStatus | null;
+  aiLiveResult: AILiveResult | null;
   setTelemetry: (t: SpacecraftTelemetry) => void;
   setObservations: (o: Observation[]) => void;
   addObservation: (o: Observation) => void;
@@ -211,6 +249,8 @@ interface MissionState {
   setMLModels: (m: MLModelInfo[]) => void;
   setDatasetManifest: (d: DatasetManifest) => void;
   setDatasetStats: (d: DatasetStats) => void;
+  setAIStatus: (s: AIStatus) => void;
+  setAILiveResult: (r: AILiveResult | null) => void;
 }
 
 export const useMissionStore = create<MissionState>((set) => ({
@@ -235,6 +275,8 @@ export const useMissionStore = create<MissionState>((set) => ({
   mlModels: [],
   datasetManifest: null,
   datasetStats: null,
+  aiStatus: null,
+  aiLiveResult: null,
   setTelemetry: (t) =>
     set((state) => ({
       telemetry: t,
@@ -268,4 +310,6 @@ export const useMissionStore = create<MissionState>((set) => ({
   setMLModels: (m) => set({ mlModels: m }),
   setDatasetManifest: (d) => set({ datasetManifest: d }),
   setDatasetStats: (d) => set({ datasetStats: d }),
+  setAIStatus: (s) => set({ aiStatus: s }),
+  setAILiveResult: (r) => set({ aiLiveResult: r }),
 }));

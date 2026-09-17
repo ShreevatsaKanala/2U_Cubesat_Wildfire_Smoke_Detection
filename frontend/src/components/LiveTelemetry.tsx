@@ -26,7 +26,14 @@ export default function LiveTelemetry() {
             <span>{t.position.altitude_km.toFixed(0)}km</span>
             <span className="text-slate-600">|</span>
             <span>Bat:{t.power.battery_soc.toFixed(0)}%</span>
-            {t.smoke_probability !== null && (
+            {t.ai_smoke_score !== null && t.ai_smoke_score !== undefined ? (
+              <>
+                <span className="text-slate-600">|</span>
+                <span className={t.ai_smoke_score > 0.6 ? "text-mission-danger" : "text-slate-300"}>AI:{t.ai_smoke_score.toFixed(3)}</span>
+                {t.ai_provider && <span className="text-slate-500">[{t.ai_provider}]</span>}
+                {t.priority && <span className={t.priority === "CRITICAL" ? "text-mission-critical" : t.priority === "HIGH" ? "text-orange-400" : "text-slate-400"}>[{t.priority}]</span>}
+              </>
+            ) : t.smoke_probability !== null && (
               <>
                 <span className="text-slate-600">|</span>
                 <span className={t.smoke_probability > 0.6 ? "text-mission-danger" : "text-slate-300"}>Smoke:{t.smoke_probability.toFixed(3)}</span>

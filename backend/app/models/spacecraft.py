@@ -138,6 +138,12 @@ class SpacecraftState(BaseModel):
     confidence: Optional[float] = None
     priority: Optional[str] = None
     packet_sequence: int = 0
+    ai_status: Optional[str] = None
+    ai_provider: Optional[str] = None
+    ai_model: Optional[str] = None
+    ai_smoke_score: Optional[float] = None
+    ai_confidence: Optional[str] = None
+    ai_latency_ms: Optional[float] = None
     # Convenience accessors for backward compatibility
     @property
     def roll_deg(self): return self.attitude.roll_deg
