@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --cesium-border: #1e293b;
+}
+
+body {
+  background-color: #0a0e17;
+  color: #e2e8f0;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #111827;
+}
+::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 3px;
+}
+
+.panel {
+  @apply bg-mission-panel border border-mission-border rounded-lg p-4;
+}
+
+.status-nominal { @apply text-mission-success; }
+.status-warning { @apply text-mission-warning; }
+.status-critical { @apply text-mission-danger; }
