@@ -17,6 +17,9 @@ import DownlinkQueuePanel from "@/components/DownlinkQueuePanel";
 import EnvironmentPanel from "@/components/EnvironmentPanel";
 import SimulationClock from "@/components/SimulationClock";
 import ConnectionIndicator from "@/components/ConnectionIndicator";
+import MLStatusPanel from "@/components/MLStatusPanel";
+import ModelComparisonPanel from "@/components/ModelComparisonPanel";
+import DatasetInspectorPanel from "@/components/DatasetInspectorPanel";
 
 const Globe = dynamic(() => import("@/components/Globe"), { ssr: false });
 
@@ -44,6 +47,7 @@ export default function MissionControl() {
         <aside className="w-64 overflow-y-auto p-2 space-y-2 border-r border-mission-border bg-mission-dark shrink-0">
           <SpacecraftStatus />
           <MissionControls />
+          <MLStatusPanel />
           <FaultInjectionPanel />
         </aside>
 
@@ -65,6 +69,8 @@ export default function MissionControl() {
           <DownlinkQueuePanel />
           <ObservationCenter />
           <ObservationHistoryPanel />
+          <ModelComparisonPanel />
+          <DatasetInspectorPanel />
           <MissionEventsPanel />
         </aside>
       </div>

@@ -26,6 +26,13 @@ data/*.db
 data/observations/
 backend/data/
 *.sqlite3
+data/raw/
+data/processed/
+data/splits/
+data/models/
+!data/labels/
+!data/samples/
+!data/metadata/
 
 # IDE
 .vscode/

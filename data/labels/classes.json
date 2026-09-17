@@ -1,0 +1,11 @@
+{
+  "classes": ["non_smoke", "smoke"],
+  "num_classes": 2,
+  "description": "Binary smoke detection: smoke vs non-smoke",
+  "task": "RGB image classification for probable wildfire smoke indication",
+  "class_mapping": {
+    "non_smoke": 0,
+    "smoke": 1
+  },
+  "notes": "Index 0 is negative class, index 1 is positive class for binary classification metrics"
+}

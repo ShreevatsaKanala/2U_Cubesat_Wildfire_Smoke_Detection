@@ -130,6 +130,42 @@ export interface Faults {
   eclipse_stuck: boolean;
 }
 
+export interface MLStatus {
+  mode: string;
+  modelName: string;
+  modelVersion: string;
+  modelLoaded: boolean;
+  threshold: number;
+}
+
+export interface MLModelInfo {
+  name: string;
+  params_m: number;
+  size_mb: number;
+  precision: number;
+  recall: number;
+  f1: number;
+  latency_ms: number;
+}
+
+export interface DatasetManifest {
+  name: string;
+  version: string;
+  source: string;
+  license: string;
+  total_images: number;
+  classes: string[];
+  splits: { train: number; val: number; test: number };
+  dimensions: { width: number; height: number; channels: number };
+}
+
+export interface DatasetStats {
+  class_counts: Record<string, number>;
+  total_images: number;
+  splits: { train: number; val: number; test: number };
+  dimensions: { width: number; height: number; channels: number };
+}
+
 interface MissionState {
   telemetry: SpacecraftTelemetry | null;
   telemetryHistory: SpacecraftTelemetry[];
@@ -148,6 +184,10 @@ interface MissionState {
   simSpeed: number;
   missionStartTime: number;
   stepsPerSec: number;
+  mlStatus: MLStatus | null;
+  mlModels: MLModelInfo[];
+  datasetManifest: DatasetManifest | null;
+  datasetStats: DatasetStats | null;
   setTelemetry: (t: SpacecraftTelemetry) => void;
   setObservations: (o: Observation[]) => void;
   addObservation: (o: Observation) => void;
@@ -167,6 +207,10 @@ interface MissionState {
   setMissionStartTime: (t: number) => void;
   setStepsPerSec: (s: number) => void;
   clearHistory: () => void;
+  setMLStatus: (s: MLStatus) => void;
+  setMLModels: (m: MLModelInfo[]) => void;
+  setDatasetManifest: (d: DatasetManifest) => void;
+  setDatasetStats: (d: DatasetStats) => void;
 }
 
 export const useMissionStore = create<MissionState>((set) => ({
@@ -187,6 +231,10 @@ export const useMissionStore = create<MissionState>((set) => ({
   simSpeed: 1,
   missionStartTime: Date.now(),
   stepsPerSec: 0,
+  mlStatus: null,
+  mlModels: [],
+  datasetManifest: null,
+  datasetStats: null,
   setTelemetry: (t) =>
     set((state) => ({
       telemetry: t,
@@ -216,4 +264,8 @@ export const useMissionStore = create<MissionState>((set) => ({
   setMissionStartTime: (t) => set({ missionStartTime: t }),
   setStepsPerSec: (s) => set({ stepsPerSec: s }),
   clearHistory: () => set({ telemetryHistory: [] }),
+  setMLStatus: (s) => set({ mlStatus: s }),
+  setMLModels: (m) => set({ mlModels: m }),
+  setDatasetManifest: (d) => set({ datasetManifest: d }),
+  setDatasetStats: (d) => set({ datasetStats: d }),
 }));

@@ -1,0 +1,19 @@
+{
+  "dataset_name": "CubeSat Smoke Detection Dataset",
+  "version": "0.1.0",
+  "description": "RGB smoke detection dataset for CubeSat onboard inference",
+  "task": "binary_classification",
+  "classes": ["non_smoke", "smoke"],
+  "target_resolution": [224, 224],
+  "sources": [],
+  "total_images": 0,
+  "class_distribution": {},
+  "split_ratios": {
+    "train": 0.70,
+    "val": 0.15,
+    "test": 0.15
+  },
+  "status": "awaiting_data_preparation",
+  "created_at": "2026-09-17T00:00:00Z",
+  "notes": "Run scripts/ml/prepare_dataset.py to populate this manifest"
+}

@@ -15,7 +15,7 @@ from app.api.v1 import (
     downlink, faults
 )
 
-engine = SimulationEngine()
+engine = SimulationEngine(sim_config={"ml_mode": settings.ML_MODE})
 telemetry_service = TelemetryService()
 
 connected_clients: set = set()

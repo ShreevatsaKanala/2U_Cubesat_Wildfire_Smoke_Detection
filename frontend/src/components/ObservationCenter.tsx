@@ -52,10 +52,27 @@ export default function ObservationCenter() {
             <div><span className="text-slate-500">Smoke:</span> <span className="font-mono text-slate-200">{obs.smoke_probability?.toFixed(3) ?? "—"}</span></div>
             <div><span className="text-slate-500">Confidence:</span> <span className="font-mono text-slate-200">{obs.confidence?.toFixed(3) ?? "—"}</span></div>
             <div><span className="text-slate-500">Priority:</span> <span className={`font-bold ${priorityColors[obs.priority] || "text-slate-200"}`}>{obs.priority}</span></div>
-            <div><span className="text-slate-500">Model:</span> <span className="font-mono text-slate-200">{obs.model_name}</span></div>
+            <div>
+              <span className="text-slate-500">Model:</span>{" "}
+              <span className="font-mono text-slate-200">{obs.model_name}</span>
+              {obs.model_version && <span className="font-mono text-slate-400 ml-1">v{obs.model_version}</span>}
+            </div>
             <div><span className="text-slate-500">Latency:</span> <span className="font-mono text-slate-200">{obs.inference_latency_ms?.toFixed(0) ?? "—"} ms</span></div>
             <div><span className="text-slate-500">Status:</span> <span className="font-mono text-slate-200">{obs.processing_status}</span></div>
           </div>
+          {obs.model_name && (
+            <div className="flex gap-1.5">
+              {obs.model_name.toLowerCase().includes("mock") ? (
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-yellow-900/40 border border-yellow-700 text-yellow-400">
+                  MOCK MODEL
+                </span>
+              ) : (
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-green-900/40 border border-green-700 text-green-400">
+                  REAL MODEL
+                </span>
+              )}
+            </div>
+          )}
           {(obs.priority === "CRITICAL" || obs.priority === "HIGH") && (
             <div className="text-[11px] p-1.5 rounded bg-red-900/30 border border-red-800 text-red-300">
               Probable smoke signature — requires ground verification

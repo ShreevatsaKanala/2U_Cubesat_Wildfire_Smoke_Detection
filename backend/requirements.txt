@@ -12,3 +12,10 @@ aiosqlite>=0.20.0
 pytest>=8.0.0
 pytest-asyncio>=0.24.0
 anyio>=4.0.0
+# ML pipeline
+torch>=2.1.0
+torchvision>=0.16.0
+onnx>=1.16.0
+onnxruntime>=1.18.0
+scikit-learn>=1.4.0
+matplotlib>=3.8.0

@@ -1,7 +1,8 @@
-"""Simulation Engine for CubeSat Digital Twin Phase 2."""
+"""Simulation Engine for CubeSat Digital Twin Phase 3."""
 from datetime import datetime, timezone, timedelta
 import math
 import random
+import logging
 from typing import Optional
 
 from app.models.spacecraft import (
@@ -20,6 +21,8 @@ from app.simulation.camera import CameraSimulator
 from app.services.observation_service import ObservationService
 from app.services.priority import PriorityCalculator
 
+logger = logging.getLogger(__name__)
+
 
 class SimulationEngine:
     def __init__(self, config: SpacecraftConfig = None, sim_config: dict = None):
@@ -34,7 +37,8 @@ class SimulationEngine:
         self.orbit_mode = sim_config.get("orbit_mode", "analytical")
         
         # ML / Camera
-        self.classifier = MockClassifier()
+        self._ml_mode = sim_config.get("ml_mode", "mock")
+        self.classifier = self._create_classifier()
         self.camera = CameraSimulator(sim_config.get("camera", {}))
         self.observation_service = ObservationService()
         self.priority_calculator = PriorityCalculator()
@@ -54,6 +58,32 @@ class SimulationEngine:
         self.packet_sequence = 0
         self.current_observation_id: Optional[str] = None
         self._state = self._create_initial_state()
+
+    def _create_classifier(self):
+        """Create classifier based on ML_MODE setting."""
+        if self._ml_mode == "real":
+            try:
+                from app.ml.real_classifier import RealSmokeClassifier
+                from app.core.config import settings
+                classifier = RealSmokeClassifier(
+                    model_path=settings.ML_MODEL_PATH,
+                    device=settings.ML_DEVICE,
+                    smoke_threshold=settings.ML_SMOKE_THRESHOLD,
+                )
+                if classifier.is_loaded():
+                    logger.info("Real ML classifier loaded successfully")
+                    return classifier
+                else:
+                    logger.warning("Real ML model not found, falling back to mock. "
+                                   "ML UNAVAILABLE — set ML_MODE=mock or train a model.")
+                    self._ml_status = "unavailable"
+                    return MockClassifier()
+            except Exception as e:
+                logger.error(f"Failed to load real classifier: {e}. ML UNAVAILABLE.")
+                self._ml_status = "unavailable"
+                return MockClassifier()
+        else:
+            return MockClassifier()
 
     def _create_initial_state(self) -> SpacecraftState:
         initial_pos = self.orbit_service.update(self.sim_time)
@@ -80,7 +110,7 @@ class SimulationEngine:
             communication_status="nominal",
             gps_status="nominal",
             camera_status="standby",
-            ml_status="ready",
+            ml_status=getattr(self, '_ml_status', 'ready'),
             packet_sequence=0,
         )
 
@@ -335,8 +365,22 @@ class SimulationEngine:
         self._state.camera_status = "standby"
         
         self._state.ml_status = "processing"
-        cls_result = self.classifier.classify(capture["image_path"])
-        self._state.ml_status = "ready"
+        try:
+            cls_result = self.classifier.classify(capture["image_path"])
+        except Exception as e:
+            logger.error(f"ML classification failed: {e}")
+            cls_result = {
+                "smoke_probability": 0.0,
+                "wildfire_probability": 0.0,
+                "confidence": 0.0,
+                "model_name": "unavailable",
+                "model_version": "0.0.0",
+                "inference_latency_ms": 0.0,
+                "processing_status": "error",
+            }
+            self._state.ml_status = "error"
+        else:
+            self._state.ml_status = "real" if self._ml_mode == "real" else "mock"
         self._add_event(EventType.ML_RESULT_READY,
                        f"ML result for {observation_id}: smoke={cls_result['smoke_probability']:.3f}", "info")
         

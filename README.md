@@ -145,13 +145,38 @@ cd backend
 python -m pytest tests/ -v
 ```
 
-42 tests covering:
-- Model validation
-- Orbit propagation
-- ML classification
-- Priority calculation
+62 tests (5 skipped if torch not installed) covering:
+- Model validation, orbit propagation, ML classification, priority calculation
 - API endpoints (health, config, spacecraft, observations, events, ground station, downlink, faults, simulation, environment)
+- ML pipeline (preprocessing, postprocessing, metrics, model registry, classifier integration)
 - External adapters
+
+## ML Pipeline
+
+```bash
+# Prepare dataset
+python scripts/ml/prepare_dataset.py --source <data_path> --output data/raw
+
+# Split dataset
+python scripts/ml/split_dataset.py --labels data/labels/labels.json --output data/splits
+
+# Train models
+python scripts/ml/train.py --data data/splits/ --model mobilenet_v3_small --epochs 30
+
+# Evaluate
+python scripts/ml/evaluate.py --model data/models/best_model.pt --data data/splits/
+
+# Export
+python scripts/ml/export.py --model data/models/best_model.pt --format onnx
+
+# Benchmark
+python scripts/ml/benchmark.py --model data/models/best_model.pt
+
+# Full pipeline
+python scripts/ml/run_pipeline.py --source <data_path>
+```
+
+Set `ML_MODE=real` in `.env` to use trained model. Default is `ML_MODE=mock`.
 
 ## External Integrations
 
@@ -164,7 +189,7 @@ python -m pytest tests/ -v
 
 ## Digital Twin Domains
 
-Phase 2 implements the expanded simulation:
+Phase 3 adds real ML inference pipeline:
 
 1. **Mission/Orbit** — SGP4 propagation with configurable orbital parameters
 2. **Spacecraft State** — Full state vector with power, thermal, attitude
@@ -172,18 +197,19 @@ Phase 2 implements the expanded simulation:
 4. **Thermal Subsystem** — Multi-node thermal with safe range tracking
 5. **ADCS** — NADIR, SUN_SYNC, INERTIAL attitude modes
 6. **Camera/Payload** — Synthetic image generation with terrain simulation
-7. **AI/ML Inference** — Pluggable interface with deterministic mock classifier
-8. **Mission Decision Logic** — Weighted priority calculation (CRITICAL/HIGH/MEDIUM/LOW)
-9. **Fault Management** — Inject/clear battery, camera, ADCS, comms, eclipse faults
-10. **Ground Station** — Pass detection, visibility, elevation/azimuth calculation
-11. **Downlink** — Priority-ordered queue with transmission tracking
-12. **Mission Events** — Event logging with severity levels
-13. **Telemetry** — Typed packets with live WebSocket streaming
-14. **Ground Dashboard** — 3D Cesium globe with ground track, FIRMS, camera footprint
+7. **AI/ML Inference** — Pluggable interface: MockClassifier + RealSmokeClassifier
+8. **ML Pipeline** — Preprocessing, training, evaluation, threshold calibration, ONNX export
+9. **Mission Decision Logic** — Weighted priority calculation (CRITICAL/HIGH/MEDIUM/LOW)
+10. **Fault Management** — Inject/clear battery, camera, ADCS, comms, eclipse faults
+11. **Ground Station** — Pass detection, visibility, elevation/azimuth calculation
+12. **Downlink** — Priority-ordered queue with transmission tracking
+13. **Mission Events** — Event logging with severity levels
+14. **Telemetry** — Typed packets with live WebSocket streaming
+15. **Ground Dashboard** — 3D Cesium globe with ground track, FIRMS, camera footprint
 
 ## Roadmap
 
-- [ ] Replace mock classifier with real lightweight CNN/MobileNet/ONNX model
+- [x] Replace mock classifier with real lightweight CNN/MobileNet/ONNX model
 - [ ] Add real TLE loading from CelesTrak
 - [ ] SQLite/PostgreSQL persistence layer
 - [ ] Observation image downlink simulation
@@ -193,6 +219,8 @@ Phase 2 implements the expanded simulation:
 - [ ] Subsystem-level EPS depth
 - [ ] Detailed thermal model improvement
 - [ ] Replay/export functionality
+- [ ] Raspberry Pi 5 deployment and benchmarking
+- [ ] Real dataset acquisition and training
 
 ## Security
 

@@ -182,3 +182,60 @@ export async function fetchAirQuality(lat: number, lon: number) {
 export async function fetchHotspots() {
   return get<{ lat: number; lon: number; frp: number; confidence: string }[]>("/api/v1/environment/hotspots");
 }
+
+export async function fetchMLStatus() {
+  return get<{
+    mode: string;
+    model_name: string;
+    model_version: string;
+    model_loaded: boolean;
+    threshold: number;
+  }>("/api/v1/ml/status");
+}
+
+export async function fetchMLModels() {
+  return get<{
+    models: {
+      name: string;
+      params_m: number;
+      size_mb: number;
+      precision: number;
+      recall: number;
+      f1: number;
+      latency_ms: number;
+    }[];
+  }>("/api/v1/ml/models");
+}
+
+export async function fetchMLMetrics() {
+  return get<{
+    accuracy: number;
+    precision: number;
+    recall: number;
+    f1: number;
+    confusion_matrix: number[][];
+    auc_roc: number;
+  }>("/api/v1/ml/metrics");
+}
+
+export async function fetchDatasetManifest() {
+  return get<{
+    name: string;
+    version: string;
+    source: string;
+    license: string;
+    total_images: number;
+    classes: string[];
+    splits: { train: number; val: number; test: number };
+    dimensions: { width: number; height: number; channels: number };
+  }>("/api/v1/dataset/manifest");
+}
+
+export async function fetchDatasetStats() {
+  return get<{
+    class_counts: Record<string, number>;
+    total_images: number;
+    splits: { train: number; val: number; test: number };
+    dimensions: { width: number; height: number; channels: number };
+  }>("/api/v1/dataset/stats");
+}
