@@ -43,24 +43,55 @@ Frontend available at: http://localhost:3000
 ```
 backend/
 ├── app/
-│   ├── main.py              # FastAPI application
+│   ├── main.py              # FastAPI application + WebSocket
 │   ├── core/config.py        # Settings via env vars
 │   ├── models/               # Pydantic schemas
+│   │   ├── spacecraft.py     # SpacecraftState, PowerState, ThermalState, etc.
+│   │   ├── telemetry.py      # TelemetryPacket, MissionEvent
+│   │   ├── observation.py    # Observation record
+│   │   ├── events.py         # MissionEvent, EventLog
+│   │   ├── ground_station.py # GroundStationConfig, GroundPass
+│   │   └── downlink.py       # DownlinkItem, DownlinkQueue
 │   ├── simulation/           # Engine, orbit, camera
+│   │   ├── engine.py         # SimulationEngine (fault injection, ground station, downlink)
+│   │   ├── orbit/sgp4_orbit.py # Orbit propagation
+│   │   └── camera.py         # Synthetic image capture
 │   ├── ml/                   # Inference interface + mock
-│   ├── services/             # Telemetry, observations, priority
-│   ├── adapters/             # External API clients
-│   ├── api/v1/               # REST endpoints
+│   ├── services/             # Telemetry, observations, priority, ground station, downlink
+│   ├── adapters/             # External API clients (FIRMS, Weather, CelesTrak, GIBS)
+│   ├── api/v1/               # REST endpoints (11 routers)
 │   └── data/                 # Database layer
-├── tests/                    # pytest tests
+├── tests/                    # pytest tests (42 tests)
 └── requirements.txt
 
 frontend/
 ├── src/
-│   ├── app/                  # Next.js pages
-│   ├── components/           # React components
-│   ├── lib/                  # API client, WebSocket
-│   └── stores/               # Zustand state
+│   ├── app/
+│   │   ├── page.tsx          # Main dashboard layout
+│   │   ├── layout.tsx        # Root layout
+│   │   └── globals.css       # Mission theme styles
+│   ├── components/           # 16 React components
+│   │   ├── Globe.tsx         # CesiumJS 3D Earth (ground track, FIRMS, footprint)
+│   │   ├── SpacecraftStatus.tsx
+│   │   ├── MissionControls.tsx
+│   │   ├── SimulationClock.tsx
+│   │   ├── PowerPanel.tsx
+│   │   ├── ThermalPanel.tsx
+│   │   ├── HealthPanel.tsx
+│   │   ├── FaultInjectionPanel.tsx
+│   │   ├── MissionEventsPanel.tsx
+│   │   ├── GroundStationPanel.tsx
+│   │   ├── DownlinkQueuePanel.tsx
+│   │   ├── ObservationCenter.tsx
+│   │   ├── ObservationHistoryPanel.tsx
+│   │   ├── EnvironmentPanel.tsx
+│   │   ├── LiveTelemetry.tsx
+│   │   └── ConnectionIndicator.tsx
+│   ├── lib/
+│   │   ├── api.ts            # REST API client (17 endpoints)
+│   │   └── websocket.ts      # WebSocket client
+│   └── stores/
+│       └── telemetryStore.ts # Zustand state management
 ├── package.json
 └── tsconfig.json
 ```
@@ -71,6 +102,14 @@ frontend/
 cd backend
 python -m pytest tests/ -v
 ```
+
+42 tests covering:
+- Model validation
+- Orbit propagation
+- ML classification
+- Priority calculation
+- API endpoints (including Phase 2: events, ground station, downlink, faults)
+- External adapters
 
 ## Code Style
 

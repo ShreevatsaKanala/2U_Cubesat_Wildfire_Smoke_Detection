@@ -1,12 +1,12 @@
 "use client";
 import { useEffect, useRef, useCallback } from "react";
-import { useMissionStore, SpacecraftTelemetry } from "@/stores/telemetryStore";
+import { useMissionStore, type SpacecraftTelemetry } from "@/stores/telemetryStore";
 
 const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
 
 export function useTelemetrySocket() {
   const wsRef = useRef<WebSocket | null>(null);
-  const { setTelemetry, setConnected, connected } = useMissionStore();
+  const { setTelemetry, setConnected } = useMissionStore();
 
   const connect = useCallback(() => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) return;
@@ -23,10 +23,12 @@ export function useTelemetrySocket() {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (data.type === "telemetry") {
+        if (data.type === "telemetry" && data.payload) {
           setTelemetry(data.payload as SpacecraftTelemetry);
         }
-      } catch {}
+      } catch {
+        // ignore malformed messages
+      }
     };
   }, [setTelemetry, setConnected]);
 

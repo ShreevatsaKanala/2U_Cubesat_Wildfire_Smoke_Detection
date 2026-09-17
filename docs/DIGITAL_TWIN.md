@@ -22,29 +22,56 @@ None of these represent actual flight hardware specifications.
 ```
 1. Orbit Propagation
    → Spacecraft position and attitude evolve over time
-   
-2. Observation Trigger
+
+2. Power Model
+   → Battery SOC, solar generation, eclipse detection
+   → Coulomb counting with configurable efficiency
+
+3. Thermal Model
+   → Multi-node thermal simulation
+   → Solar heating, Earth albedo, internal dissipation
+   → Radiative cooling to deep space
+
+4. ADCS Simulation
+   → NADIR, SUN_SYNC, INERTIAL attitude modes
+   → Quaternion noise, pointing error
+
+5. Fault Injection (Phase 2)
+   → Battery, camera, ADCS, comms, eclipse faults
+   → Real-time fault state changes
+
+6. Observation Trigger
    → Camera captures image at configurable intervals
-   
-3. Image Generation
+
+7. Image Generation
    → Synthetic Earth observation image (gradient + terrain simulation)
-   
-4. ML Inference
+
+8. ML Inference
    → Probable smoke/wildfire signature detection
    → Probability, confidence, model metadata
-   
-5. Priority Decision
+
+9. Priority Decision
    → Weighted scoring of probability × confidence
    → CRITICAL / HIGH / MEDIUM / LOW
-   
-6. Telemetry Event
-   → Observation record created
-   → State broadcast via WebSocket
-   
-7. Ground Dashboard
-   → 3D Cesium globe with spacecraft position
-   → Live telemetry panels
-   → Observation center with ML results
+
+10. Ground Station Pass Check
+    → Visibility window detection
+    → Elevation and azimuth calculation
+
+11. Downlink Queue
+    → Priority-ordered observation transmission
+    → Queue management with TX/fail statistics
+
+12. Telemetry Event
+    → Observation record created
+    → State broadcast via WebSocket
+    → Mission events logged
+
+13. Ground Dashboard
+    → 3D Cesium globe with spacecraft position
+    → Ground track, camera footprint, FIRMS markers
+    → Live telemetry, power, thermal, health panels
+    → Fault injection, event log, downlink queue
 ```
 
 ## Uncertainty Language
@@ -58,18 +85,18 @@ The system uses carefully chosen terminology:
 
 ## Pluggable Subsystems
 
-Every major component is behind an interface:
-
-| Component | Phase 1 | Future |
-|---|---|---|
-| Orbit | Analytical circular | SGP4 with real TLE |
-| Camera | Synthetic images | Raspberry Pi capture |
-| ML | Mock classifier | MobileNet/ONNX/TFLite |
-| Persistence | In-memory | SQLite → PostgreSQL |
-| Comms | WebSocket only | Actual downlink sim |
-| Power | Simple model | Subsystem-level EPS |
-| Thermal | Basic model | Multi-node thermal |
-| ADCS | Quaternion noise | Full attitude control |
+| Component | Phase 1 | Phase 2 | Future |
+|---|---|---|---|
+| Orbit | Analytical circular | SGP4 with analytical fallback | Full SGP4 with real TLE |
+| Camera | Synthetic images | Synthetic images | Raspberry Pi capture |
+| ML | Mock classifier | Mock classifier (pipeline ready) | MobileNet/ONNX/TFLite |
+| Persistence | In-memory | In-memory | SQLite → PostgreSQL |
+| Comms | WebSocket only | WebSocket + downlink queue | Actual downlink sim |
+| Power | Simple model | Coulomb counting, eclipse | Subsystem-level EPS |
+| Thermal | Basic model | Multi-node thermal | Detailed thermal |
+| ADCS | Quaternion noise | NADIR/SUN_SYNC/INERTIAL modes | Full attitude control |
+| Fault Mgmt | None | Inject/clear 5 fault types | Autonomous recovery |
+| Ground Stn | None | Pass detection, visibility | Multi-station network |
 
 ## Configuration
 
@@ -89,6 +116,11 @@ solar_generation_w = 2.0
 sim_speed = 1.0
 telemetry_frequency_hz = 1.0
 observation_interval_s = 30.0
+
+# Ground Station
+ground_station_lat = 37.7749
+ground_station_lon = -122.4194
+min_elevation_deg = 10.0
 ```
 
 ## Deterministic Mode

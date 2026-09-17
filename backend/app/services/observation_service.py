@@ -124,9 +124,9 @@ class ObservationService:
             priority = getattr(obs, 'priority', 'UNKNOWN')
             priorities[priority] = priorities.get(priority, 0) + 1
 
-            ml_results = getattr(obs, 'ml_results', None)
-            if ml_results:
-                total_smoke += ml_results.get('smoke_probability', 0.0)
+            sp = getattr(obs, 'smoke_probability', None)
+            if sp is not None:
+                total_smoke += sp
 
         return {
             "total_count": len(self.observations),

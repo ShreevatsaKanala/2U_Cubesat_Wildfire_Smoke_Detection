@@ -9,9 +9,12 @@ NOTE: All orbital parameters here are SIMULATION ORBIT parameters for the
 digital twin, not actual flight orbit parameters.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+import logging
 import math
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 # SGP4 constants
 MU_EARTH = 398600.4418  # km^3/s^2
@@ -78,7 +81,7 @@ class SGP4OrbitService:
             self._use_sgp4 = True
             self._epoch = datetime.now(timezone.utc)
         except ImportError:
-            print("SGP4 library not available, falling back to analytical model")
+            logger.warning("SGP4 library not available, falling back to analytical model")
             self._init_from_altitude(DEFAULT_ALTITUDE_KM, DEFAULT_INCLINATION_DEG)
 
     def _init_from_keplerian(self, keplerian: dict):
@@ -265,7 +268,7 @@ class SGP4OrbitService:
                         "velocity_eci": list(v)
                     }
             except Exception as e:
-                print(f"SGP4 propagation failed: {e}, using analytical model")
+                logger.warning("SGP4 propagation failed: %s, using analytical model", e)
 
         # Fallback to analytical model
         return self._analytical_propagate(timestamp)
@@ -295,15 +298,6 @@ class SGP4OrbitService:
                 "altitude_km": state["altitude_km"],
                 "velocity_km_s": state["velocity_km_s"]
             })
-            current_time = current_time.replace(
-                second=current_time.second,
-                microsecond=0
-            )
-            current_time = current_time.fromordinal(
-                current_time.toordinal()
-            )
-            # Simple time increment
-            total_seconds = current_time.timestamp() + step_seconds
-            current_time = datetime.fromtimestamp(total_seconds, tz=timezone.utc)
+            current_time = current_time + timedelta(seconds=step_seconds)
 
         return ground_track

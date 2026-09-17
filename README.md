@@ -37,6 +37,11 @@ The AI system identifies **probable** smoke/wildfire signatures, outputs probabi
 - SGP4 orbit propagation (with analytical fallback)
 - Pluggable ML inference interface
 - External API adapters (NASA FIRMS, Open-Meteo, CelesTrak, NASA GIBS)
+- Power model (coulomb counting, eclipse detection)
+- Thermal model (multi-node radiative)
+- Fault injection system
+- Ground station pass detection
+- Downlink queue management
 
 ### Frontend Stack
 
@@ -45,6 +50,7 @@ The AI system identifies **probable** smoke/wildfire signatures, outputs probabi
 - CesiumJS for 3D Earth visualisation
 - Zustand for state management
 - WebSocket client for live telemetry
+- 16 mission control panels
 
 ## Setup
 
@@ -65,7 +71,7 @@ Edit `.env` and fill in:
 | Variable | Description |
 |---|---|
 | `NASA_FIRMS_MAP_KEY` | NASA FIRMS API key for wildfire hotspot data |
-| `CESIUM_ION_TOKEN` | Cesium Ion access token for 3D globe imagery |
+| `NEXT_PUBLIC_CESIUM_TOKEN` | Cesium Ion access token for 3D globe imagery |
 
 The system works **without** external API keys — adapters gracefully degrade.
 
@@ -100,11 +106,21 @@ docker-compose up --build
 |---|---|---|
 | GET | `/api/v1/health` | Health check |
 | GET | `/api/v1/config` | Spacecraft and simulation configuration |
-| GET | `/api/v1/spacecraft/state` | Current spacecraft state |
+| GET | `/api/v1/spacecraft/state` | Full spacecraft state |
+| GET | `/api/v1/spacecraft/health` | Subsystem health status |
+| GET | `/api/v1/spacecraft/power` | Power subsystem state |
+| GET | `/api/v1/spacecraft/thermal` | Thermal node temperatures |
+| GET | `/api/v1/spacecraft/attitude` | ADCS attitude state |
 | GET | `/api/v1/telemetry/latest` | Latest telemetry packet |
-| GET | `/api/v1/telemetry/history` | Telemetry history |
-| GET | `/api/v1/observations` | List observations |
+| GET | `/api/v1/observations` | Paginated observation list |
 | GET | `/api/v1/observations/{id}` | Get specific observation |
+| GET | `/api/v1/events` | Mission event log |
+| GET | `/api/v1/ground-station/status` | Ground station pass status |
+| GET | `/api/v1/ground-station/config` | Ground station configuration |
+| GET | `/api/v1/downlink/status` | Downlink queue status |
+| GET | `/api/v1/faults` | Current fault states |
+| POST | `/api/v1/faults/inject` | Inject faults |
+| POST | `/api/v1/faults/clear` | Clear all faults |
 | POST | `/api/v1/simulation/start` | Start simulation |
 | POST | `/api/v1/simulation/stop` | Stop simulation |
 | POST | `/api/v1/simulation/reset` | Reset simulation |
@@ -118,7 +134,9 @@ docker-compose up --build
 - **START** — Begin simulation loop (orbit propagation, observations, telemetry)
 - **STOP** — Pause simulation
 - **RESET** — Reset to initial state
-- Speed: Configurable via simulation config (default 1x)
+- Speed: Configurable via frontend controls (1x, 5x, 10x, 50x)
+- Orbit mode: LEO, SSO, GEO presets
+- Camera modes: Follow, Top-down, Free
 
 ## Testing
 
@@ -127,12 +145,12 @@ cd backend
 python -m pytest tests/ -v
 ```
 
-34 tests covering:
+42 tests covering:
 - Model validation
 - Orbit propagation
 - ML classification
 - Priority calculation
-- API endpoints
+- API endpoints (health, config, spacecraft, observations, events, ground station, downlink, faults, simulation, environment)
 - External adapters
 
 ## External Integrations
@@ -146,17 +164,22 @@ python -m pytest tests/ -v
 
 ## Digital Twin Domains
 
-Phase 1 implements the core vertical slice:
+Phase 2 implements the expanded simulation:
 
 1. **Mission/Orbit** — SGP4 propagation with configurable orbital parameters
 2. **Spacecraft State** — Full state vector with power, thermal, attitude
-3. **Camera/Payload** — Synthetic image generation with terrain simulation
-4. **AI/ML Inference** — Pluggable interface with deterministic mock classifier
-5. **Mission Decision Logic** — Weighted priority calculation (CRITICAL/HIGH/MEDIUM/LOW)
-6. **Telemetry** — Typed packets with live WebSocket streaming
-7. **Ground Station** — 3D Cesium globe with real-time spacecraft tracking
-
-Future phases will add: ADCS, data handling, communications, power subsystem depth, thermal modelling, fault management.
+3. **Power Subsystem** — Coulomb counting, eclipse detection, solar generation
+4. **Thermal Subsystem** — Multi-node thermal with safe range tracking
+5. **ADCS** — NADIR, SUN_SYNC, INERTIAL attitude modes
+6. **Camera/Payload** — Synthetic image generation with terrain simulation
+7. **AI/ML Inference** — Pluggable interface with deterministic mock classifier
+8. **Mission Decision Logic** — Weighted priority calculation (CRITICAL/HIGH/MEDIUM/LOW)
+9. **Fault Management** — Inject/clear battery, camera, ADCS, comms, eclipse faults
+10. **Ground Station** — Pass detection, visibility, elevation/azimuth calculation
+11. **Downlink** — Priority-ordered queue with transmission tracking
+12. **Mission Events** — Event logging with severity levels
+13. **Telemetry** — Typed packets with live WebSocket streaming
+14. **Ground Dashboard** — 3D Cesium globe with ground track, FIRMS, camera footprint
 
 ## Roadmap
 
@@ -164,11 +187,11 @@ Future phases will add: ADCS, data handling, communications, power subsystem dep
 - [ ] Add real TLE loading from CelesTrak
 - [ ] SQLite/PostgreSQL persistence layer
 - [ ] Observation image downlink simulation
-- [ ] Ground station dashboard enhancements
-- [ ] FIRMS hotspot overlay on Cesium globe
-- [ ] Fault management and safe mode logic
-- [ ] Power budget depth (subsystem-level)
-- [ ] Thermal model improvement
+- [ ] Multi-station ground network
+- [ ] FIRMS hotspot overlay on Cesium globe (live)
+- [ ] Autonomous fault recovery logic
+- [ ] Subsystem-level EPS depth
+- [ ] Detailed thermal model improvement
 - [ ] Replay/export functionality
 
 ## Security

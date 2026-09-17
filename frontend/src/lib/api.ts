@@ -1,56 +1,184 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+async function get<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`);
+  if (!res.ok) throw new Error(`API ${res.status}: ${path}`);
+  return res.json();
+}
+
+async function post<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: body ? { "Content-Type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) throw new Error(`API ${res.status}: ${path}`);
+  return res.json();
+}
+
 export async function fetchHealth() {
-  const res = await fetch(`${API_BASE}/api/v1/health`);
-  return res.json();
+  return get<{ status: string }>("/api/v1/health");
 }
 
-export async function fetchSpacecraftState() {
-  const res = await fetch(`${API_BASE}/api/v1/spacecraft/state`);
-  return res.json();
+export async function fetchSpacecraftHealth() {
+  return get<{
+    overall: string;
+    eps: { status: string; uptime_s: number };
+    obc: { status: string; uptime_s: number };
+    comms: { status: string; uptime_s: number };
+    adcs: { status: string; uptime_s: number };
+    camera: { status: string; uptime_s: number };
+    gps: { status: string; uptime_s: number };
+  }>("/api/v1/spacecraft/health");
 }
 
-export async function fetchTelemetryLatest() {
-  const res = await fetch(`${API_BASE}/api/v1/telemetry/latest`);
-  return res.json();
+export async function fetchSpacecraftPower() {
+  return get<{
+    battery_soc: number;
+    battery_voltage: number;
+    solar_generation_w: number;
+    power_consumption_w: number;
+    power_balance_w: number;
+    eclipse: boolean;
+    battery_temperature_c: number;
+  }>("/api/v1/spacecraft/power");
 }
 
-export async function fetchObservations(limit = 20) {
-  const res = await fetch(`${API_BASE}/api/v1/observations?limit=${limit}`);
-  return res.json();
+export async function fetchSpacecraftThermal() {
+  return get<{
+    nodes: { name: string; temperature_c: number; min_safe_c: number; max_safe_c: number }[];
+  }>("/api/v1/spacecraft/thermal");
+}
+
+export async function fetchSpacecraftAttitude() {
+  return get<{
+    roll_deg: number;
+    pitch_deg: number;
+    yaw_deg: number;
+    attitude_mode: string;
+    pointing_error_deg: number;
+    roll_rate_dps: number;
+    pitch_rate_dps: number;
+    yaw_rate_dps: number;
+  }>("/api/v1/spacecraft/attitude");
+}
+
+export async function fetchEvents(limit = 50) {
+  return get<{ id: string; timestamp: string; event_type: string; severity: string; message: string; data: unknown }[]>(
+    `/api/v1/events?limit=${limit}`
+  );
+}
+
+export async function fetchGroundStationStatus() {
+  return get<{
+    distance_km: number;
+    is_visible: boolean;
+    next_pass_s: number;
+    elevation_deg: number;
+    azimuth_deg: number;
+  }>("/api/v1/ground-station/status");
+}
+
+export async function fetchGroundStationConfig() {
+  return get<{
+    name: string;
+    latitude: number;
+    longitude: number;
+    altitude_m: number;
+    min_elevation_deg: number;
+  }>("/api/v1/ground-station/config");
+}
+
+export async function fetchDownlinkStatus() {
+  return get<{
+    queue: { id: string; observation_id: string; size_bytes: number; priority: string; created_at: string; status: string }[];
+    total_transmitted: number;
+    total_failed: number;
+  }>("/api/v1/downlink/status");
+}
+
+export async function fetchFaults() {
+  return get<{
+    battery_low: boolean;
+    camera_failure: boolean;
+    adcs_failure: boolean;
+    comms_failure: boolean;
+    eclipse_stuck: boolean;
+  }>("/api/v1/faults");
+}
+
+export async function injectFaults(faults: {
+  battery_low?: boolean;
+  camera_failure?: boolean;
+  adcs_failure?: boolean;
+  comms_failure?: boolean;
+  eclipse_stuck?: boolean;
+}) {
+  return post<{
+    battery_low: boolean;
+    camera_failure: boolean;
+    adcs_failure: boolean;
+    comms_failure: boolean;
+    eclipse_stuck: boolean;
+  }>("/api/v1/faults/inject", faults);
+}
+
+export async function clearFaults() {
+  return post<{
+    battery_low: boolean;
+    camera_failure: boolean;
+    adcs_failure: boolean;
+    comms_failure: boolean;
+    eclipse_stuck: boolean;
+  }>("/api/v1/faults/clear");
+}
+
+export async function fetchObservations(limit = 20, offset = 0) {
+  return get<{
+    observations: {
+      observation_id: string;
+      timestamp: string;
+      latitude: number;
+      longitude: number;
+      altitude_km: number;
+      image_path: string;
+      smoke_probability: number | null;
+      wildfire_probability: number | null;
+      confidence: number | null;
+      priority: string;
+      model_name: string | null;
+      model_version: string | null;
+      inference_latency_ms: number | null;
+      processing_status: string;
+    }[];
+    total: number;
+    limit: number;
+    offset: number;
+  }>(`/api/v1/observations?limit=${limit}&offset=${offset}`);
 }
 
 export async function startSimulation() {
-  const res = await fetch(`${API_BASE}/api/v1/simulation/start`, { method: "POST" });
-  return res.json();
+  return post<{ status: string }>("/api/v1/simulation/start");
 }
 
 export async function stopSimulation() {
-  const res = await fetch(`${API_BASE}/api/v1/simulation/stop`, { method: "POST" });
-  return res.json();
+  return post<{ status: string }>("/api/v1/simulation/stop");
 }
 
 export async function resetSimulation() {
-  const res = await fetch(`${API_BASE}/api/v1/simulation/reset`, { method: "POST" });
-  return res.json();
-}
-
-export async function fetchConfig() {
-  const res = await fetch(`${API_BASE}/api/v1/config`);
-  return res.json();
+  return post<{ status: string }>("/api/v1/simulation/reset");
 }
 
 export async function fetchWeather(lat: number, lon: number) {
-  const res = await fetch(`${API_BASE}/api/v1/environment/weather?lat=${lat}&lon=${lon}`);
-  return res.json();
+  return get<{ temperature?: number; humidity?: number; description?: string }>(
+    `/api/v1/environment/weather?lat=${lat}&lon=${lon}`
+  );
 }
 
 export async function fetchAirQuality(lat: number, lon: number) {
-  const res = await fetch(`${API_BASE}/api/v1/environment/air-quality?lat=${lat}&lon=${lon}`);
-  return res.json();
+  return get<{ aqi?: number; label?: string }>(`/api/v1/environment/air-quality?lat=${lat}&lon=${lon}`);
 }
 
 export async function fetchHotspots() {
-  const res = await fetch(`${API_BASE}/api/v1/environment/hotspots`);
-  return res.json();
+  return get<{ lat: number; lon: number; frp: number; confidence: string }[]>("/api/v1/environment/hotspots");
 }
