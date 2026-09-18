@@ -599,12 +599,12 @@ def test_malformed_ai_response():
 # --- 24. AI status endpoint ---
 
 def test_ai_status_endpoint():
-    """GET /api/ai/status returns correct data."""
+    """GET /api/v1/ai/status returns correct data."""
     from fastapi.testclient import TestClient
     from app.main import app
 
     client = TestClient(app)
-    resp = client.get("/api/ai/status")
+    resp = client.get("/api/v1/ai/status")
     assert resp.status_code == 200
     data = resp.json()
     assert "mode" in data
