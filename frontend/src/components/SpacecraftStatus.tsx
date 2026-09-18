@@ -1,65 +1,84 @@
 "use client";
 import React from "react";
-import { useMissionStore } from "@/stores/telemetryStore";
-import { Satellite, Navigation, Radio, Gauge } from "lucide-react";
+import type { DemoState } from "@/lib/demoEngine";
 
-function StatusItem({ label, value, unit, status }: { label: string; value: string | number; unit?: string; status?: "nominal" | "warning" | "critical" }) {
+interface SpacecraftStatusProps {
+  state: DemoState | null;
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  NOMINAL: "bg-mission-success",
+  ACTIVE: "bg-mission-success",
+  LINKED: "bg-mission-success",
+  LOCKED: "bg-mission-success",
+  READY: "bg-mission-success",
+  ONLINE: "bg-mission-success",
+  NADIR: "bg-mission-success",
+  WARNING: "bg-mission-warning",
+  STANDBY: "bg-slate-500",
+  OFFLINE: "bg-mission-danger",
+};
+
+const STATUS_TEXT_COLORS: Record<string, string> = {
+  NOMINAL: "text-mission-success",
+  ACTIVE: "text-mission-success",
+  LINKED: "text-mission-success",
+  LOCKED: "text-mission-success",
+  READY: "text-mission-success",
+  ONLINE: "text-mission-success",
+  NADIR: "text-mission-success",
+  WARNING: "text-mission-warning",
+  STANDBY: "text-slate-400",
+  OFFLINE: "text-mission-danger",
+};
+
+function LED({ status }: { status: string }) {
+  const color = STATUS_COLORS[status] ?? "bg-slate-600";
+  const isAnimating = status !== "STANDBY" && status !== "OFFLINE";
   return (
-    <div className="flex justify-between items-center py-0.5">
-      <span className="text-xs text-slate-400">{label}</span>
-      <span className={`text-xs font-mono ${status === "warning" ? "text-mission-warning" : status === "critical" ? "text-mission-critical" : "text-slate-100"}`}>
-        {typeof value === "number" ? value.toFixed(2) : value}{unit && <span className="text-slate-500 ml-1">{unit}</span>}
-      </span>
+    <div
+      className={`w-1.5 h-1.5 rounded-full shrink-0 ${color} ${
+        isAnimating ? "animate-pulse" : ""
+      }`}
+    />
+  );
+}
+
+function StatusRow({ label, status }: { label: string; status: string }) {
+  const textColor = STATUS_TEXT_COLORS[status] ?? "text-slate-400";
+  return (
+    <div className="flex items-center justify-between py-0.5">
+      <div className="flex items-center gap-1.5">
+        <LED status={status} />
+        <span className="text-[10px] text-slate-400 uppercase tracking-wider">{label}</span>
+      </div>
+      <span className={`text-[10px] font-mono font-bold ${textColor}`}>{status}</span>
     </div>
   );
 }
 
-export default function SpacecraftStatus() {
-  const t = useMissionStore((s) => s.telemetry);
-  if (!t) return <div className="panel"><p className="text-slate-500 text-xs">Awaiting telemetry...</p></div>;
-
-  const battStatus = t.power.battery_soc > 50 ? "nominal" : t.power.battery_soc > 20 ? "warning" : "critical";
+export default function SpacecraftStatus({ state }: SpacecraftStatusProps) {
+  const health = state?.health;
 
   return (
-    <div className="space-y-2">
-      <div className="panel">
-        <h3 className="text-xs font-semibold text-mission-accent uppercase tracking-wider mb-1 flex items-center gap-1.5">
-          <Satellite size={12} /> Mission
-        </h3>
-        <StatusItem label="Mode" value={t.mission_mode} />
-        <StatusItem label="Packet" value={`#${t.packet_sequence}`} />
-        <StatusItem label="SC ID" value={t.spacecraft_id} />
-      </div>
-      <div className="panel">
-        <h3 className="text-xs font-semibold text-mission-accent uppercase tracking-wider mb-1 flex items-center gap-1.5">
-          <Navigation size={12} /> Navigation
-        </h3>
-        <StatusItem label="Latitude" value={t.position.latitude} unit="deg" />
-        <StatusItem label="Longitude" value={t.position.longitude} unit="deg" />
-        <StatusItem label="Altitude" value={t.position.altitude_km} unit="km" />
-        <StatusItem label="Velocity" value={t.position.velocity_km_s} unit="km/s" />
-        <StatusItem label="Heading" value={t.position.heading_deg} unit="deg" />
-      </div>
-      <div className="panel">
-        <h3 className="text-xs font-semibold text-mission-accent uppercase tracking-wider mb-1 flex items-center gap-1.5">
-          <Radio size={12} /> Attitude
-        </h3>
-        <StatusItem label="Roll" value={t.attitude.roll_deg} unit="deg" />
-        <StatusItem label="Pitch" value={t.attitude.pitch_deg} unit="deg" />
-        <StatusItem label="Yaw" value={t.attitude.yaw_deg} unit="deg" />
-        <StatusItem label="Mode" value={t.attitude.attitude_mode} />
-        <StatusItem label="Pointing err" value={t.attitude.pointing_error_deg} unit="deg" />
-      </div>
-      <div className="panel">
-        <h3 className="text-xs font-semibold text-mission-accent uppercase tracking-wider mb-1 flex items-center gap-1.5">
-          <Gauge size={12} /> Subsystems
-        </h3>
-        <StatusItem label="GPS" value={t.health.gps.status} status={t.health.gps.status === "NOMINAL" ? "nominal" : t.health.gps.status === "WARNING" ? "warning" : "critical"} />
-        <StatusItem label="Comms" value={t.health.comms.status} status={t.health.comms.status === "NOMINAL" ? "nominal" : t.health.comms.status === "WARNING" ? "warning" : "critical"} />
-        <StatusItem label="Camera" value={t.health.camera.status} status={t.health.camera.status === "NOMINAL" ? "nominal" : t.health.camera.status === "WARNING" ? "warning" : "critical"} />
-        <StatusItem label="ADCS" value={t.health.adcs.status} status={t.health.adcs.status === "NOMINAL" ? "nominal" : t.health.adcs.status === "WARNING" ? "warning" : "critical"} />
-        <StatusItem label="Overall" value={t.health.overall} status={t.health.overall === "NOMINAL" ? "nominal" : t.health.overall === "WARNING" ? "warning" : "critical"} />
-      </div>
+    <div className="panel space-y-1">
+      <h3 className="text-[10px] font-semibold text-mission-accent uppercase tracking-widest mb-1.5">
+        Spacecraft Status
+      </h3>
+      {health ? (
+        <div className="space-y-0.5">
+          <StatusRow label="OBC" status={health.obc} />
+          <StatusRow label="CAMERA" status={health.camera} />
+          <StatusRow label="ADCS" status={health.adcs} />
+          <StatusRow label="EPS" status={health.eps} />
+          <StatusRow label="THERMAL" status={health.thermal} />
+          <StatusRow label="COMMS" status={health.comms} />
+          <StatusRow label="GPS" status={health.gps} />
+          <StatusRow label="AI" status={health.ai} />
+        </div>
+      ) : (
+        <div className="text-[10px] text-slate-500 font-mono">INITIALIZING...</div>
+      )}
     </div>
   );
 }

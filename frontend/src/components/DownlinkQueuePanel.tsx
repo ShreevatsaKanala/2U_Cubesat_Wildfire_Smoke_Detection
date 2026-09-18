@@ -1,36 +1,9 @@
 "use client";
-import React, { useEffect, useCallback } from "react";
-import { useMissionStore } from "@/stores/telemetryStore";
-import { fetchDownlinkStatus } from "@/lib/api";
-import { Download } from "lucide-react";
+import React from "react";
+import type { DemoState } from "@/lib/demoEngine";
 
-const STATUS_LABELS: Record<string, string> = {
-  queued: "QUEUED",
-  transferring: "TRANSMITTING",
-  paused: "PAUSED",
-  transmitted: "COMPLETE",
-  failed: "FAILED",
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  queued: "text-slate-400",
-  transferring: "text-mission-warning",
-  paused: "text-blue-400",
-  transmitted: "text-mission-success",
-  failed: "text-mission-danger",
-};
-
-function formatBand(band: string): string {
-  switch (band) {
-    case "s_band":
-      return "S-Band";
-    case "x_band":
-      return "X-Band";
-    case "ka_band":
-      return "Ka-Band";
-    default:
-      return band;
-  }
+interface DownlinkQueuePanelProps {
+  state: DemoState | null;
 }
 
 function formatBytes(bytes: number): string {
@@ -45,103 +18,107 @@ function formatRate(bytesPerSec: number): string {
   return `${bytesPerSec.toFixed(0)} B/s`;
 }
 
-export default function DownlinkQueuePanel() {
-  const { downlinkQueue, setDownlinkQueue } = useMissionStore();
+export default function DownlinkQueuePanel({ state }: DownlinkQueuePanelProps) {
+  const downlink = state?.downlink;
 
-  const load = useCallback(() => {
-    fetchDownlinkStatus().then(setDownlinkQueue).catch(() => {});
-  }, [setDownlinkQueue]);
-
-  useEffect(() => {
-    load();
-    const id = setInterval(load, 5000);
-    return () => clearInterval(id);
-  }, [load]);
-
-  if (!downlinkQueue) {
+  if (!downlink) {
     return (
-      <div className="panel space-y-2">
-        <h3 className="text-xs font-semibold text-mission-accent uppercase tracking-wider flex items-center gap-1.5">
-          <Download size={12} /> Downlink Queue
-        </h3>
-        <p className="text-slate-500 text-xs">Loading...</p>
+      <div className="panel">
+        <div className="text-[10px] text-slate-500 font-mono">INITIALIZING...</div>
       </div>
     );
   }
 
-  const { items, total_transmitted, effective_rate_bytes_s, current_band, progress } = downlinkQueue;
+  const { items, totalTransmitted, effectiveRateBytesS, currentBand, progress } = downlink;
+  const linkedStation = state?.groundStations?.find((gs) => gs.isLinked);
 
   return (
     <div className="panel space-y-2">
-      <h3 className="text-xs font-semibold text-mission-accent uppercase tracking-wider flex items-center gap-1.5">
-        <Download size={12} /> Downlink Queue
+      <h3 className="text-[10px] font-semibold text-mission-accent uppercase tracking-widest">
+        Downlink
       </h3>
 
-      <div className="flex flex-wrap gap-3 text-[10px]">
-        <span className="text-slate-400">
-          TX: <span className="font-mono text-mission-success">{total_transmitted}</span>
-        </span>
-        <span className="text-slate-400">
-          Band: <span className="font-mono text-slate-300">{formatBand(current_band)}</span>
-        </span>
-        <span className="text-slate-400">
-          Rate: <span className="font-mono text-slate-300">{formatRate(effective_rate_bytes_s)}</span>
-        </span>
-        <span className="text-slate-400">
-          Progress: <span className="font-mono text-slate-300">{progress.overall_progress_pct.toFixed(1)}%</span>
-        </span>
+      <div className="space-y-1">
+        <div className="flex justify-between py-0.5">
+          <span className="text-[10px] text-slate-400 uppercase tracking-wider">Station</span>
+          <span className={`text-[10px] font-mono font-bold ${linkedStation ? "text-mission-success" : "text-slate-500"}`}>
+            {linkedStation?.name ?? "NONE"}
+          </span>
+        </div>
+        <div className="flex justify-between py-0.5">
+          <span className="text-[10px] text-slate-400 uppercase tracking-wider">Band</span>
+          <span className="text-[10px] font-mono text-slate-200">{currentBand}</span>
+        </div>
+        <div className="flex justify-between py-0.5">
+          <span className="text-[10px] text-slate-400 uppercase tracking-wider">Rate</span>
+          <span className="text-[10px] font-mono text-slate-200">
+            {effectiveRateBytesS > 0 ? formatRate(effectiveRateBytesS) : "---"}
+          </span>
+        </div>
+        <div className="flex justify-between py-0.5">
+          <span className="text-[10px] text-slate-400 uppercase tracking-wider">TX</span>
+          <span className="text-[10px] font-mono text-mission-success">{totalTransmitted}</span>
+        </div>
       </div>
 
-      {progress.total_active_bytes > 0 && (
-        <div className="w-full bg-mission-dark rounded-full h-1.5">
-          <div
-            className="bg-mission-accent h-1.5 rounded-full transition-all duration-500"
-            style={{ width: `${Math.min(progress.overall_progress_pct, 100)}%` }}
-          />
+      {progress.activeCount > 0 && (
+        <div className="space-y-1">
+          <div className="flex justify-between text-[10px]">
+            <span className="text-slate-400">Progress</span>
+            <span className="font-mono text-slate-200">{progress.overallProgressPct.toFixed(1)}%</span>
+          </div>
+          <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+            <div
+              className="h-full bg-mission-accent rounded-full transition-all duration-500"
+              style={{ width: `${Math.min(progress.overallProgressPct, 100)}%` }}
+            />
+          </div>
         </div>
       )}
 
-      <div className="max-h-32 overflow-y-auto space-y-1">
-        {items.length === 0 && (
-          <p className="text-slate-500 text-[11px]">Queue empty</p>
-        )}
-        {items.map((item) => (
-          <div
-            key={item.observation_id}
-            className="flex items-center justify-between px-2 py-1 rounded bg-mission-dark border border-mission-border text-[10px]"
-          >
-            <div className="flex-1 min-w-0">
-              <span className="font-mono text-slate-300 truncate block">
-                {item.observation_id}
-              </span>
-              <span className="text-slate-600">
-                {formatBytes(item.image_size_bytes)} · {item.priority}
-                {item.assigned_station && ` · ${item.assigned_station}`}
-              </span>
-              {item.status === "transferring" && item.progress_pct > 0 && (
-                <div className="flex items-center gap-1 mt-0.5">
-                  <div className="w-16 bg-slate-700 rounded-full h-1">
-                    <div
-                      className="bg-mission-warning h-1 rounded-full"
-                      style={{ width: `${item.progress_pct}%` }}
-                    />
-                  </div>
-                  <span className="text-slate-500">{item.progress_pct.toFixed(0)}%</span>
-                </div>
-              )}
-              {item.status === "paused" && item.pause_reason && (
-                <span className="text-blue-400 text-[9px]">
-                  {item.pause_reason.replace(/_/g, " ")}
-                </span>
-              )}
-            </div>
-            <span
-              className={`font-mono font-bold ml-2 ${STATUS_COLORS[item.status] || "text-slate-400"}`}
+      <div className="space-y-1 max-h-28 overflow-y-auto">
+        {items.length === 0 ? (
+          <div className="text-[9px] text-slate-600 font-mono text-center py-1">QUEUE EMPTY</div>
+        ) : (
+          items.slice(0, 5).map((item) => (
+            <div
+              key={item.observationId}
+              className="flex items-center justify-between px-1.5 py-1 rounded bg-slate-800/50 border border-slate-700/50"
             >
-              {STATUS_LABELS[item.status] || item.status}
-            </span>
-          </div>
-        ))}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] font-mono text-slate-300">{item.observationId}</span>
+                  <span className="text-[8px] text-slate-600">{formatBytes(item.sizeBytes)}</span>
+                </div>
+                {item.status === "transmitting" && (
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <div className="w-16 h-1 bg-slate-700 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-mission-accent rounded-full"
+                        style={{ width: `${item.progressPct}%` }}
+                      />
+                    </div>
+                    <span className="text-[8px] text-slate-500 font-mono">{item.progressPct.toFixed(0)}%</span>
+                  </div>
+                )}
+                {item.status === "paused" && (
+                  <span className="text-[8px] text-mission-warning font-mono">PAUSED</span>
+                )}
+              </div>
+              <span
+                className={`text-[8px] font-mono font-bold ml-1.5 ${
+                  item.status === "transmitting"
+                    ? "text-mission-warning"
+                    : item.status === "paused"
+                    ? "text-slate-500"
+                    : "text-slate-400"
+                }`}
+              >
+                {item.status === "transmitting" ? "TX" : item.status === "paused" ? "PAUSED" : "QUEUED"}
+              </span>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );

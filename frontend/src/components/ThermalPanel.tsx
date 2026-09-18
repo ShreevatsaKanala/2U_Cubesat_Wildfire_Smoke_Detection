@@ -1,50 +1,83 @@
 "use client";
 import React from "react";
-import { useMissionStore } from "@/stores/telemetryStore";
-import { Thermometer } from "lucide-react";
+import type { DemoState } from "@/lib/demoEngine";
 
-export default function ThermalPanel() {
-  const t = useMissionStore((s) => s.telemetry);
-  if (!t) return <div className="panel"><p className="text-slate-500 text-xs">Awaiting telemetry...</p></div>;
+interface ThermalPanelProps {
+  state: DemoState | null;
+}
 
-  const nodes = t.thermal.nodes;
-  const allTemps = nodes.map((n) => n.temperature_c);
-  const minT = Math.min(...allTemps, -20);
-  const maxT = Math.max(...allTemps, 60);
-  const range = maxT - minT || 1;
+interface ThermalNode {
+  label: string;
+  temp: number;
+}
+
+function getTrend(temp: number, base: number): string {
+  const diff = temp - base;
+  if (diff > 1) return "↑";
+  if (diff < -1) return "↓";
+  return "→";
+}
+
+function getTempColor(temp: number): string {
+  if (temp > 55) return "text-mission-danger";
+  if (temp > 45) return "text-mission-warning";
+  return "text-slate-100";
+}
+
+function getTempDotColor(temp: number): string {
+  if (temp > 55) return "bg-mission-danger";
+  if (temp > 45) return "bg-mission-warning";
+  return "bg-mission-success";
+}
+
+export default function ThermalPanel({ state }: ThermalPanelProps) {
+  const thermal = state?.thermal;
+
+  if (!thermal) {
+    return (
+      <div className="panel">
+        <div className="text-[10px] text-slate-500 font-mono">INITIALIZING...</div>
+      </div>
+    );
+  }
+
+  const nodes: ThermalNode[] = [
+    { label: "OBC", temp: thermal.obc },
+    { label: "CAMERA", temp: thermal.camera },
+    { label: "BATTERY", temp: thermal.battery },
+    { label: "COMMS", temp: thermal.comms },
+    { label: "STRUCTURE", temp: thermal.structure },
+  ];
+
+  const baseTemps: Record<string, number> = {
+    OBC: 34.2,
+    CAMERA: 30.8,
+    BATTERY: 28.1,
+    COMMS: 32.4,
+    STRUCTURE: 24.7,
+  };
 
   return (
-    <div className="panel space-y-2">
-      <h3 className="text-xs font-semibold text-mission-accent uppercase tracking-wider flex items-center gap-1.5">
-        <Thermometer size={12} /> Thermal
+    <div className="panel space-y-1.5">
+      <h3 className="text-[10px] font-semibold text-mission-accent uppercase tracking-widest">
+        Thermal
       </h3>
-      {nodes.map((node) => {
-        const safeMinPct = ((node.min_safe_c - minT) / range) * 100;
-        const safeMaxPct = ((node.max_safe_c - minT) / range) * 100;
-        const tempPct = ((node.temperature_c - minT) / range) * 100;
-        const inSafe = node.temperature_c >= node.min_safe_c && node.temperature_c <= node.max_safe_c;
-        const nearHigh = node.temperature_c > node.max_safe_c - 5;
-        const barColor = inSafe ? (nearHigh ? "bg-mission-warning" : "bg-mission-success") : "bg-mission-danger";
-
-        return (
-          <div key={node.name} className="space-y-0.5">
-            <div className="flex justify-between text-[11px]">
-              <span className="text-slate-400 truncate">{node.name.replace(/_/g, " ")}</span>
-              <span className={`font-mono font-bold ${inSafe ? (nearHigh ? "text-mission-warning" : "text-slate-200") : "text-mission-danger"}`}>
-                {node.temperature_c.toFixed(1)}°C
-              </span>
-            </div>
-            <div className="relative w-full h-2 bg-slate-700 rounded-full overflow-hidden">
-              <div className="absolute h-full bg-slate-600 rounded" style={{ left: `${safeMinPct}%`, width: `${safeMaxPct - safeMinPct}%` }} />
-              <div className={`absolute h-full ${barColor} rounded-full transition-all duration-500`} style={{ width: `${tempPct}%` }} />
-            </div>
-            <div className="flex justify-between text-[9px] text-slate-600">
-              <span>{node.min_safe_c}°C</span>
-              <span>{node.max_safe_c}°C</span>
-            </div>
+      {nodes.map((node) => (
+        <div key={node.label} className="flex items-center justify-between py-0.5">
+          <div className="flex items-center gap-1.5">
+            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${getTempDotColor(node.temp)}`} />
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider">{node.label}</span>
           </div>
-        );
-      })}
+          <div className="flex items-center gap-1.5">
+            <span className={`text-[11px] font-mono font-bold ${getTempColor(node.temp)}`}>
+              {node.temp.toFixed(1)}°C
+            </span>
+            <span className="text-[10px] text-slate-500 w-3 text-center">
+              {getTrend(node.temp, baseTemps[node.label])}
+            </span>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

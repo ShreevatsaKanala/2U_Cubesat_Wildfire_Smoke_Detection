@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useMissionStore } from "@/stores/telemetryStore";
 import { fetchHotspots } from "@/lib/api";
+import type { DemoState } from "@/lib/demoEngine";
 
 let Cesium: typeof import("cesium") | null = null;
 
@@ -26,7 +27,11 @@ interface HotspotData {
   id?: string;
 }
 
-export default function Globe() {
+interface GlobeProps {
+  demoState?: DemoState | null;
+}
+
+export default function Globe({ demoState }: GlobeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<InstanceType<typeof import("cesium").Viewer> | null>(null);
   const satelliteEntityRef = useRef<any>(null);
@@ -51,13 +56,19 @@ export default function Globe() {
   const [hotspots, setHotspots] = useState<HotspotData[]>([]);
   const [selectedFirms, setSelectedFirms] = useState<HotspotData | null>(null);
 
+  // Derive position from demo state or store telemetry
+  const pos = demoState
+    ? { latitude: demoState.spacecraft.latitude, longitude: demoState.spacecraft.longitude, altitude_km: demoState.spacecraft.altitudeKm }
+    : telemetry?.position ?? null;
+
   useEffect(() => {
+    if (demoState) return; // Demo mode: no API calls for hotspots
     fetchHotspots().then(setHotspots).catch(() => {});
     const id = setInterval(() => {
       fetchHotspots().then(setHotspots).catch(() => {});
     }, 60000);
     return () => clearInterval(id);
-  }, []);
+  }, [demoState]);
 
   const trackUserInteraction = useCallback((viewer: any) => {
     const handler = () => {
@@ -171,8 +182,8 @@ export default function Globe() {
       const orbitPath = viewer.entities.add({
         polyline: {
           positions: new Cesium.CallbackProperty(() => {
-            if (!Cesium || !telemetry) return [];
-            return computeOrbitPath(telemetry.position.latitude, telemetry.position.longitude, telemetry.position.altitude_km);
+            if (!Cesium || !pos) return [];
+            return computeOrbitPath(pos?.latitude, pos?.longitude, pos?.altitude_km);
           }, false),
           width: 1.5,
           material: new Cesium.PolylineDashMaterialProperty({ color: Cesium.Color.CYAN.withAlpha(0.3), dashLength: 16 }),
@@ -183,8 +194,8 @@ export default function Globe() {
         position: Cesium.Cartesian3.fromDegrees(0, 0, 0),
         polygon: {
           hierarchy: new Cesium.CallbackProperty(() => {
-            if (!Cesium || !telemetry) return undefined;
-            return computeCameraFootprint(telemetry.position.latitude, telemetry.position.longitude, telemetry.position.altitude_km);
+            if (!Cesium || !pos) return undefined;
+            return computeCameraFootprint(pos?.latitude, pos?.longitude, pos?.altitude_km);
           }, false),
           material: Cesium.Color.YELLOW.withAlpha(0.12),
           outline: true,
@@ -196,12 +207,12 @@ export default function Globe() {
         position: Cesium.Cartesian3.fromDegrees(0, 0, 0),
         cylinder: {
           length: new Cesium.CallbackProperty(() => {
-            if (!telemetry) return 0;
-            return telemetry.position.altitude_km * 1000;
+            if (!pos) return 0;
+            return pos.altitude_km * 1000;
           }, false),
           topRadius: new Cesium.CallbackProperty(() => {
-            if (!telemetry) return 0;
-            const altM = telemetry.position.altitude_km * 1000;
+            if (!pos) return 0;
+            const altM = pos.altitude_km * 1000;
             return altM * Math.tan((15 * Math.PI) / 180);
           }, false),
           bottomRadius: 0,
@@ -280,24 +291,24 @@ export default function Globe() {
   }, []);
 
   useEffect(() => {
-    if (!viewerRef.current || !telemetry || !Cesium) return;
+    if (!viewerRef.current || !pos || !Cesium) return;
 
     const viewer = viewerRef.current;
-    const pos = Cesium.Cartesian3.fromDegrees(
-      telemetry.position.longitude,
-      telemetry.position.latitude,
-      telemetry.position.altitude_km * 1000
+    const cartesianPos = Cesium.Cartesian3.fromDegrees(
+      pos.longitude,
+      pos.latitude,
+      pos.altitude_km * 1000
     );
 
     if (satelliteEntityRef.current) {
-      satelliteEntityRef.current.position = pos;
+      satelliteEntityRef.current.position = cartesianPos;
     }
 
     if (footprintConeRef.current) {
-      footprintConeRef.current.position = pos;
+      footprintConeRef.current.position = cartesianPos;
     }
 
-    trackPointsRef.current.push(pos);
+    trackPointsRef.current.push(cartesianPos);
     trackIndexRef.current = trackPointsRef.current.length - 1;
     const maxPoints = Math.ceil((MAX_ORBITS_GROUND_TRACK * ORBIT_PERIOD_S) / 5) * 3;
     while (trackPointsRef.current.length > maxPoints) {
@@ -306,19 +317,19 @@ export default function Globe() {
     }
 
     if (!userInteractingRef.current && (globeView === "follow" || globeView === "top-down")) {
-      const distance = globeView === "top-down" ? telemetry.position.altitude_km * 1000 + 2000000 : telemetry.position.altitude_km * 1000 + 5000000;
+      const distance = globeView === "top-down" ? pos.altitude_km * 1000 + 2000000 : pos.altitude_km * 1000 + 5000000;
       const pitch = globeView === "top-down" ? -Math.PI / 2 : -Math.PI / 3;
       viewer.camera.flyTo({
         destination: Cesium.Cartesian3.fromDegrees(
-          telemetry.position.longitude,
-          telemetry.position.latitude,
+          pos.longitude,
+          pos.latitude,
           distance
         ),
         orientation: { heading: 0, pitch, roll: 0 },
         duration: 0.3,
       });
     }
-  }, [telemetry, globeView]);
+  }, [pos, globeView]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!viewerRef.current || !Cesium) return;

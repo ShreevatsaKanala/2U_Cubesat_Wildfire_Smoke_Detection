@@ -29,14 +29,31 @@ from app.api.v1.firms import router as firms_router
 from app.api.v1.correlation import router as correlation_router
 from app.api.v1.replay import router as replay_router
 from app.api.v1.export import router as export_router
+from app.api.v1.demo import router as demo_router
 from app.core.database import init_db, close_db
 
 engine = SimulationEngine(sim_config={"ml_mode": settings.ML_MODE, "ai_mode": settings.AI_MODE})
 telemetry_service = TelemetryService()
 
+# Demo engine for standalone demo mode
+demo_engine_instance = None
+demo_task = None
+demo_loop_running = False
+
 connected_clients: set = set()
 simulation_task = None
 sim_loop_running = False
+
+
+async def demo_loop():
+    global demo_loop_running
+    demo_loop_running = True
+    from app.demo import demo_engine
+    demo_engine.start()
+    while demo_loop_running:
+        if demo_engine._running:
+            demo_engine.tick(0.5)
+        await asyncio.sleep(0.5)
 
 # ── WebSocket broadcast throttling ──────────────────────────────────
 _last_broadcast_time: float = 0.0
@@ -118,18 +135,29 @@ async def simulation_loop():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global simulation_task, sim_loop_running
+    global simulation_task, sim_loop_running, demo_task
     await init_db()
     cleanup_scheduler.start()
     resource_monitor.set_cache_timestamp("firms")
     resource_monitor.set_cache_timestamp("tle")
     simulation_task = asyncio.create_task(simulation_loop())
+
+    if settings.DEMO_MODE:
+        demo_task = asyncio.create_task(demo_loop())
+
     yield
+
     sim_loop_running = False
     if simulation_task:
         simulation_task.cancel()
         try:
             await simulation_task
+        except asyncio.CancelledError:
+            pass
+    if demo_task:
+        demo_task.cancel()
+        try:
+            await demo_task
         except asyncio.CancelledError:
             pass
     cleanup_scheduler.stop()
@@ -170,6 +198,7 @@ app.include_router(firms_router)
 app.include_router(correlation_router)
 app.include_router(replay_router)
 app.include_router(export_router)
+app.include_router(demo_router)
 
 data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 if os.path.exists(data_dir):

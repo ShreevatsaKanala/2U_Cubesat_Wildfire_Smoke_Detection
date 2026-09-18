@@ -1,55 +1,80 @@
 "use client";
-import React, { useEffect, useCallback } from "react";
-import { useMissionStore } from "@/stores/telemetryStore";
-import { fetchEvents } from "@/lib/api";
-import { Activity } from "lucide-react";
+import React from "react";
+import type { DemoState } from "@/lib/demoEngine";
 
-const severityColor = (s: string) => {
-  if (s === "CRITICAL") return "border-l-mission-danger bg-red-900/20";
-  if (s === "ERROR") return "border-l-mission-danger bg-red-900/10";
-  if (s === "WARNING") return "border-l-mission-warning bg-yellow-900/10";
-  return "border-l-slate-600 bg-slate-800/30";
-};
+interface MissionEventsPanelProps {
+  state: DemoState | null;
+}
 
-const severityText = (s: string) => {
-  if (s === "CRITICAL") return "text-mission-danger";
-  if (s === "ERROR") return "text-mission-danger";
-  if (s === "WARNING") return "text-mission-warning";
-  return "text-slate-400";
-};
+function severityColor(severity: string): string {
+  switch (severity) {
+    case "CRITICAL":
+      return "border-l-mission-danger bg-red-900/20";
+    case "ERROR":
+      return "border-l-mission-danger bg-red-900/10";
+    case "WARNING":
+      return "border-l-mission-warning bg-yellow-900/10";
+    default:
+      return "border-l-slate-700 bg-slate-800/20";
+  }
+}
 
-export default function MissionEventsPanel() {
-  const { events, setEvents } = useMissionStore();
+function severityTextColor(severity: string): string {
+  switch (severity) {
+    case "CRITICAL":
+    case "ERROR":
+      return "text-mission-danger";
+    case "WARNING":
+      return "text-mission-warning";
+    default:
+      return "text-slate-400";
+  }
+}
 
-  const loadEvents = useCallback(() => {
-    fetchEvents(50)
-      .then((data) => setEvents(data.map((e) => ({ ...e, data: e.data as Record<string, unknown> | null }))))
-      .catch(() => {});
-  }, [setEvents]);
+function eventTypeColor(type: string): string {
+  switch (type) {
+    case "OBSERVATION":
+      return "text-mission-accent";
+    case "AI ANALYSIS":
+      return "text-purple-400";
+    case "PRIORITY":
+      return "text-orange-400";
+    case "DOWNLINK":
+      return "text-cyan-400";
+    case "FAULT":
+      return "text-mission-danger";
+    case "ORBIT":
+      return "text-slate-500";
+    default:
+      return "text-slate-500";
+  }
+}
 
-  useEffect(() => {
-    loadEvents();
-    const id = setInterval(loadEvents, 10000);
-    return () => clearInterval(id);
-  }, [loadEvents]);
+export default function MissionEventsPanel({ state }: MissionEventsPanelProps) {
+  const events = state?.events ?? [];
 
   return (
     <div className="space-y-1">
-      <h3 className="text-[11px] font-semibold text-mission-accent uppercase tracking-wider flex items-center gap-1.5">
-        <Activity size={10} /> Mission Events
+      <h3 className="text-[10px] font-semibold text-mission-accent uppercase tracking-widest mb-1">
+        Mission Events
       </h3>
-      <div className="overflow-y-auto space-y-0.5">
-        {events.length === 0 && <p className="text-slate-500 text-[11px]">No events recorded</p>}
-        {events.map((e) => (
-          <div key={e.id} className={`border-l-2 ${severityColor(e.severity)} px-2 py-1 rounded-r`}>
-            <div className="flex justify-between items-start">
-              <span className={`text-[10px] font-mono font-bold ${severityText(e.severity)}`}>{e.severity}</span>
-              <span className="text-[9px] text-slate-600 font-mono">{new Date(e.timestamp).toLocaleTimeString()}</span>
+      <div className="overflow-y-auto space-y-0.5 max-h-[140px]">
+        {events.length === 0 ? (
+          <div className="text-[9px] text-slate-600 font-mono text-center py-2">NO EVENTS</div>
+        ) : (
+          events.slice(0, 30).map((evt) => (
+            <div key={evt.id} className={`border-l-2 ${severityColor(evt.severity)} px-2 py-0.5 rounded-r`}>
+              <div className="flex justify-between items-start">
+                <span className="text-[8px] font-mono text-slate-600">{evt.timestamp}</span>
+                <span className={`text-[8px] font-mono font-bold ${severityTextColor(evt.severity)}`}>
+                  {evt.severity}
+                </span>
+              </div>
+              <p className="text-[9px] text-slate-300 leading-tight">{evt.message}</p>
+              <span className={`text-[8px] font-mono ${eventTypeColor(evt.type)}`}>{evt.type}</span>
             </div>
-            <p className="text-[10px] text-slate-300 leading-tight">{e.message}</p>
-            <span className="text-[9px] text-slate-500">{e.event_type}</span>
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   );

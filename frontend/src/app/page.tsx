@@ -1,90 +1,77 @@
 "use client";
 import React from "react";
 import dynamic from "next/dynamic";
-import { useTelemetrySocket } from "@/lib/websocket";
+import { useDemoEngine } from "@/hooks/useDemoEngine";
+import MissionHeader from "@/components/MissionHeader";
 import SpacecraftStatus from "@/components/SpacecraftStatus";
-import HealthPanel from "@/components/HealthPanel";
 import PowerPanel from "@/components/PowerPanel";
 import ThermalPanel from "@/components/ThermalPanel";
-import MissionControls from "@/components/MissionControls";
-import FaultInjectionPanel from "@/components/FaultInjectionPanel";
-import LiveTelemetry from "@/components/LiveTelemetry";
+import ADCSPanel from "@/components/ADCSPanel";
+import AIVisionPanel from "@/components/AIVisionPanel";
 import ObservationCenter from "@/components/ObservationCenter";
-import ObservationHistoryPanel from "@/components/ObservationHistoryPanel";
-import MissionEventsPanel from "@/components/MissionEventsPanel";
-import GroundStationPanel from "@/components/GroundStationPanel";
-import GroundNetworkPanel from "@/components/GroundNetworkPanel";
-import FIRMSOverlayPanel from "@/components/FIRMSOverlayPanel";
 import DownlinkQueuePanel from "@/components/DownlinkQueuePanel";
-import EnvironmentPanel from "@/components/EnvironmentPanel";
-import SimulationClock from "@/components/SimulationClock";
-import ConnectionIndicator from "@/components/ConnectionIndicator";
-import AIStatusPanel from "@/components/AIStatusPanel";
-import ModelComparisonPanel from "@/components/ModelComparisonPanel";
-import DatasetInspectorPanel from "@/components/DatasetInspectorPanel";
+import GroundStationStrip from "@/components/GroundStationStrip";
+import MissionEventsPanel from "@/components/MissionEventsPanel";
+import DemoControls from "@/components/DemoControls";
 
 const Globe = dynamic(() => import("@/components/Globe"), { ssr: false });
 
 export default function MissionControl() {
-  useTelemetrySocket();
+  const {
+    state,
+    start,
+    pause,
+    reset,
+    setSpeed,
+    setScenario,
+    injectFault,
+    clearFaults,
+  } = useDemoEngine();
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
-      {/* Header */}
-      <header className="bg-mission-panel border-b border-mission-border px-4 py-2 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          <h1 className="text-sm font-semibold tracking-wide text-slate-100">
-            <span className="text-mission-accent">CUBESAT</span> DIGITAL TWIN
-          </h1>
-          <span className="text-[10px] text-slate-500 border border-mission-border rounded px-1.5 py-0.5">Phase 5</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <ConnectionIndicator />
-        </div>
-      </header>
+    <div className="h-screen flex flex-col overflow-hidden scanline">
+      <MissionHeader state={state} />
 
-      {/* Main Content */}
       <div className="flex-1 flex overflow-hidden min-h-0">
-        {/* Left sidebar - Spacecraft Status */}
-        <aside className="w-64 overflow-y-auto p-2 space-y-2 border-r border-mission-border bg-mission-dark shrink-0">
-          <SpacecraftStatus />
-          <PowerPanel />
-          <ThermalPanel />
-          <HealthPanel />
+        <aside className="w-56 overflow-y-auto p-1.5 space-y-1.5 border-r border-mission-border bg-mission-dark/50 shrink-0 scrollbar-thin">
+          <SpacecraftStatus state={state} />
+          <PowerPanel state={state} />
+          <ThermalPanel state={state} />
+          <ADCSPanel state={state} />
         </aside>
 
-        {/* Center - Globe */}
-        <main className="flex-1 min-w-0">
-          <Globe />
+        <main className="flex-1 min-w-0 relative">
+          <Globe demoState={state} />
         </main>
 
-        {/* Right sidebar - Operations */}
-        <aside className="w-72 overflow-y-auto p-2 space-y-2 border-l border-mission-border bg-mission-dark shrink-0">
-          <MissionControls />
-          <ObservationCenter />
-          <AIStatusPanel />
-          <GroundNetworkPanel />
-          <FIRMSOverlayPanel />
-          <EnvironmentPanel />
-          <GroundStationPanel />
-          <DownlinkQueuePanel />
-          <ObservationHistoryPanel />
-          <ModelComparisonPanel />
-          <DatasetInspectorPanel />
-          <FaultInjectionPanel />
+        <aside className="w-64 overflow-y-auto p-1.5 space-y-1.5 border-l border-mission-border bg-mission-dark/50 shrink-0 scrollbar-thin">
+          <AIVisionPanel state={state} />
+          <ObservationCenter state={state} />
+          <DownlinkQueuePanel state={state} />
         </aside>
       </div>
 
-      {/* Bottom - Timeline, Telemetry Log, Events */}
-      <div className="border-t border-mission-border bg-mission-panel shrink-0 h-52 flex">
-        <div className="flex-1 overflow-y-auto p-2">
-          <LiveTelemetry />
+      <div className="border-t border-mission-border bg-mission-panel/60 backdrop-blur shrink-0">
+        <div className="px-2 py-1.5">
+          <GroundStationStrip state={state} />
         </div>
-        <div className="border-l border-mission-border flex-1 overflow-y-auto p-2">
-          <MissionEventsPanel />
+      </div>
+
+      <div className="border-t border-mission-border bg-mission-panel/60 backdrop-blur shrink-0 h-36 flex">
+        <div className="flex-1 overflow-y-auto p-2 scrollbar-thin">
+          <MissionEventsPanel state={state} />
         </div>
-        <div className="border-l border-mission-border">
-          <SimulationClock />
+        <div className="border-l border-mission-border px-3 py-1.5 flex items-center">
+          <DemoControls
+            state={state}
+            onStart={start}
+            onPause={pause}
+            onReset={reset}
+            onSetSpeed={setSpeed}
+            onSetScenario={setScenario}
+            onInjectFault={injectFault}
+            onClearFaults={clearFaults}
+          />
         </div>
       </div>
     </div>
