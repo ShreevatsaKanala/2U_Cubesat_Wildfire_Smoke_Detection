@@ -34,11 +34,11 @@ export default function MissionEventsPanel() {
   }, [loadEvents]);
 
   return (
-    <div className="panel space-y-2">
-      <h3 className="text-xs font-semibold text-mission-accent uppercase tracking-wider flex items-center gap-1.5">
-        <Activity size={12} /> Mission Events
+    <div className="space-y-1">
+      <h3 className="text-[11px] font-semibold text-mission-accent uppercase tracking-wider flex items-center gap-1.5">
+        <Activity size={10} /> Mission Events
       </h3>
-      <div className="max-h-48 overflow-y-auto space-y-1">
+      <div className="overflow-y-auto space-y-0.5">
         {events.length === 0 && <p className="text-slate-500 text-[11px]">No events recorded</p>}
         {events.map((e) => (
           <div key={e.id} className={`border-l-2 ${severityColor(e.severity)} px-2 py-1 rounded-r`}>

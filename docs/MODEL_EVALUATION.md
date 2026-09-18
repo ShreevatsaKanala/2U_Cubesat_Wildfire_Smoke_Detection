@@ -221,3 +221,13 @@ For each misclassification, record:
 - [ ] Power consumption acceptable
 - [ ] Thermal throttling not triggered
 - [ ] Fallback to mock mode works correctly
+
+## Integration with Digital Twin
+
+The evaluation pipeline produces reports that inform model selection for the simulation engine:
+
+1. **Mock mode**: Default — deterministic classifier, no model needed
+2. **Real mode**: Trained model loaded from `ML_MODEL_PATH` in `.env`
+3. **AI Vision**: External providers (OpenRouter/Groq) provide independent assessment
+
+Model selection should balance accuracy, latency, and resource constraints for the target deployment platform.

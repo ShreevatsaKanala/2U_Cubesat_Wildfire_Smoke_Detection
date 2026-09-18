@@ -2,60 +2,106 @@
 
 ## System Overview
 
-The CubeSat Digital Twin is a system-level simulation of a 2U CubeSat wildfire smoke detection mission. It implements a complete vertical slice from orbital mechanics through onboard AI inference to ground-station visualization.
+The CubeSat Digital Twin is a system-level simulation of a 2U CubeSat wildfire smoke detection mission. It implements a complete vertical slice from orbital mechanics through onboard AI inference to ground-station visualization, with persistence, replay, and export capabilities.
+
+## Phase 5 Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                          SIMULATION ENGINE                                    │
+│                                                                              │
+│  TLE Service ──→ SGP4 Orbit ──→ Spacecraft State ──→ Fault Injection         │
+│       │                │                │                    │                │
+│       │                │                │                    ▼                │
+│       │                │                │          EPS Model (per-subsystem)  │
+│       │                │                │          Thermal Model (5-node)     │
+│       │                │                │                    │                │
+│       │                │                │                    ▼                │
+│       │                │                │          Camera Simulator           │
+│       │                │                │                    │                │
+│       │                │                │                    ▼                │
+│       │                │                │     ┌──────────────┴─────────────┐  │
+│       │                │                │     │                            │  │
+│       │                │                │     ▼                            ▼  │
+│       │                │                │  ML Pipeline              AI Vision │
+│       │                │                │  (mock/real)        (OpenRouter/Groq│
+│       │                │                │     │                            │  │
+│       │                │                │     └──────────────┬─────────────┘  │
+│       │                │                │                    │                │
+│       │                │                │                    ▼                │
+│       │                │                │          Priority Calculator        │
+│       │                │                │                    │                │
+│       │                │                │                    ▼                │
+│       │                │                │            Observation Record       │
+│       │                │                │                    │                │
+│       │                │                │                    ▼                │
+│       │                │                │       ┌────────────┴────────────┐  │
+│       │                │                │       │                         │  │
+│       │                │                │       ▼                         ▼  │
+│       │                │                │  FIRMS Correlation      Weather    │
+│       │                │                │  + Weather Fusion       Adapter   │
+│       │                │                │       │                         │  │
+│       │                │                │       └────────────┬────────────┘  │
+│       │                │                │                    │                │
+│       │                │                │                    ▼                │
+│       │                │                │          Ground Station Network    │
+│       │                │                │          (5 global stations)       │
+│       │                │                │                    │                │
+│       │                │                │                    ▼                │
+│       │                │                │              Downlink Queue        │
+│       │                │                │              (priority-ordered)    │
+│       │                │                │                    │                │
+│       │                │                │                    ▼                │
+│       │                │                │           Persistence (SQLite)     │
+│       │                │                │                    │                │
+│       ▼                ▼                ▼                    ▼                │
+│  TelemetryPacket ──→ WebSocket ──→ Dashboard                                  │
+│                                                                              │
+│  Fault Recovery (autonomous) ──→ Event Log ──→ Events Panel                  │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
 
 ## Data Flow
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                      SIMULATION ENGINE                           │
-│                                                                  │
-│  Orbit Service ──→ Spacecraft State ──→ Fault Injection          │
-│       │                   │                    │                 │
-│       │                   │                    ▼                 │
-│       │                   │          Power/Thermal Models        │
-│       │                   │                    │                 │
-│       │                   │                    ▼                 │
-│       │                   │          Camera Simulator            │
-│       │                   │                    │                 │
-│       │                   │                    ▼                 │
-│       │                   │          ML Inference Engine         │
-│       │                   │                    │                 │
-│       │                   │                    ▼                 │
-│       │                   │          Priority Calculator         │
-│       │                   │                    │                 │
-│       │                   │                    ▼                 │
-│       │                   └────── Observation Record             │
-│       │                              │                          │
-│       │                              ▼                          │
-│       │                    Ground Station Pass Check             │
-│       │                              │                          │
-│       │                              ▼                          │
-│       │                        Downlink Queue                    │
-│       │                              │                          │
-│       ▼                              ▼                          │
-│  TelemetryPacket ──────→ WebSocket ──→ Dashboard                 │
-│                                                                  │
-│  MissionEvents ─────────→ Event Log ──→ Events Panel             │
-└──────────────────────────────────────────────────────────────────┘
+Observation → AI/ML Analysis → Priority → Correlation → Persistence → Export
+     │              │              │           │              │           │
+     │              │              │           │              │           │
+     ▼              ▼              ▼           ▼              ▼           ▼
+  Camera        Smoke         Weighted    FIRMS+Weather   SQLite DB   JSON/CSV
+  Capture       Score         Score       Fusion          Storage     Streaming
 ```
 
 ## Backend Layers
 
 ```
-API Layer (FastAPI Routers: health, config, spacecraft, telemetry,
-           observations, simulation, environment, events,
-           ground-station, downlink, faults)
-    ↓
-Service Layer (Telemetry, Observation, Priority, GroundStationPass,
-               Downlink, MissionEvents)
-    ↓
-Domain Layer (Simulation Engine, Orbit, Camera, ML, PowerModel,
-              ThermalModel, FaultInjection)
-    ↓
-Adapter Layer (FIRMS, Weather, CelesTrak, GIBS)
-    ↓
-Persistence Layer (In-memory → SQLite → PostgreSQL)
+┌─────────────────────────────────────────────────────────────┐
+│ API Layer (FastAPI — 21 route modules)                      │
+│   health, config, spacecraft, telemetry, observations,      │
+│   simulation, environment, events, ground_station,          │
+│   downlink, faults, ai_status, tle, history, recovery,      │
+│   eps, thermal, firms, correlation, replay, export          │
+├─────────────────────────────────────────────────────────────┤
+│ Service Layer (17 service modules)                          │
+│   TelemetryService, ObservationService, PriorityCalculator, │
+│   GroundNetworkService, DownlinkScheduler, MissionEvents,   │
+│   PersistenceService, ExportService, ReplayService,         │
+│   FaultRecoveryService, EPSModel, ThermalModel,             │
+│   FireCorrelationService, TLEService, AIService             │
+├─────────────────────────────────────────────────────────────┤
+│ Domain Layer (Simulation Engine)                            │
+│   SGP4OrbitService, CameraSimulator, MockClassifier,        │
+│   RealSmokeClassifier, FaultInjection                       │
+├─────────────────────────────────────────────────────────────┤
+│ Adapter Layer (External APIs)                               │
+│   FIRMSAdapter, WeatherAdapter, CelesTrakAdapter, GIBSAdapter│
+├─────────────────────────────────────────────────────────────┤
+│ Persistence Layer (SQLite via aiosqlite)                    │
+│   Observations, Telemetry, Events, Sessions, Exports        │
+├─────────────────────────────────────────────────────────────┤
+│ Resource Management                                         │
+│   BoundedList, TTLCache, ResourceMonitor, DegradationTracker│
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ## Key Interfaces
@@ -66,14 +112,21 @@ All ML classifiers implement:
 - `classify(image_path) -> dict` with smoke_probability, confidence, model metadata
 - `get_model_info() -> dict`
 
-Phase 2: MockClassifier (deterministic, hash-based)
-Future: MobileNet, ONNX, TensorFlow Lite
+Modes: MockClassifier (deterministic), RealSmokeClassifier (PyTorch)
+
+### AIService
+
+Live external vision AI via OpenRouter/Groq:
+- Structured prompt → JSON response
+- Pydantic validation of AI output
+- Provider failover (OpenRouter → Groq → Mock)
+- Rate limiting and timeout management
 
 ### SGP4OrbitService
 
 - Accepts TLE, Keplerian elements, or simple altitude/inclination
+- CelesTrak integration for real TLE data
 - Falls back to analytical circular orbit model
-- All parameters labeled as simulation values
 
 ### CameraSimulator
 
@@ -81,27 +134,65 @@ Future: MobileNet, ONNX, TensorFlow Lite
 - Deterministic based on timestamp and position
 - Interface supports real Raspberry Pi camera replacement
 
-### SimulationEngine (Phase 2)
+### SimulationEngine
 
 - Fault injection (battery, camera, ADCS, comms, eclipse)
-- Ground station pass detection
+- Ground station network pass detection
 - Downlink queue processing
+- FIRMS correlation with weather fusion
 - Mission event logging
 - Configurable simulation speed
 
-### PowerModel (Phase 2)
+### EPSModel
 
+- Per-subsystem power consumption (OBC, ADCS, Comms, Camera, ML, Thermal)
 - Battery SOC tracking (coulomb counting)
 - Solar generation vs consumption
 - Eclipse detection
-- Power balance monitoring
+- Load shedding with priority-based decisions
+- Power budget events (LOW_POWER, CRITICAL, EMERGENCY)
 
-### ThermalModel (Phase 2)
+### ThermalModel
 
-- Multi-node thermal simulation
-- Solar heating, Earth albedo, internal dissipation
-- Radiative cooling
+- 5-node thermal simulation (OBC, Battery, Camera, Comms, Structure)
+- Solar heating, Earth albedo, Earth IR
+- Radiative cooling to deep space
+- Inter-node conduction
 - Safe operating range tracking
+- Thermal mode states (NOMINAL, WARMING, COOLING, CRITICAL_HOT, CRITICAL_COLD)
+
+### FaultRecoveryService
+
+- Autonomous recovery handlers per subsystem
+- Retry logic with configurable max retries
+- Cooldown periods between attempts
+- Recovery actions: camera reboot, comm failover, GPS propagate, battery shed, thermal emergency, OBC watchdog
+
+### FireCorrelationService
+
+- Weighted probability fusion (AI: 0.40, FIRMS: 0.35, Weather: 0.25)
+- FIRMS hotspot proximity matching
+- Weather condition analysis (wind speed, humidity, temperature)
+- Priority boost based on fused probability
+- Configurable correlation threshold
+
+### GroundNetworkService
+
+- 5 pre-configured global ground stations
+- Pass detection with visibility windows
+- Link budget calculations (data rate, SNR, link margin)
+- Station handoff events
+- Elevation and azimuth calculation
+
+## Ground Station Network
+
+| Station | Location | Latitude | Longitude | Data Rate |
+|---------|----------|----------|-----------|-----------|
+| GS-BOULDER | Boulder, CO | 40.0°N | 105.3°W | 256 kbps |
+| GS-FAIRBANKS | Fairbanks, AK | 64.9°N | 147.7°W | 512 kbps |
+| GS-SVALBARD | Svalbard, Norway | 78.2°N | 15.6°E | 1024 kbps |
+| GS-SINGAPORE | Singapore | 1.3°N | 103.8°E | 256 kbps |
+| GS-SANTIAGO | Santiago, Chile | 33.4°S | 70.6°W | 512 kbps |
 
 ## Frontend Architecture
 
@@ -109,7 +200,7 @@ Future: MobileNet, ONNX, TensorFlow Lite
 Pages (app/page.tsx)
     ↓
 Feature Components:
-    ├── Globe (CesiumJS 3D Earth)
+    ├── Globe (CesiumJS 3D Earth — ground track, FIRMS, footprint)
     ├── SpacecraftStatus (position, attitude, power, thermal, health)
     ├── MissionControls (start/stop/reset, speed, orbit mode)
     ├── SimulationClock (elapsed time, steps/sec)
@@ -131,7 +222,7 @@ State Layer (Zustand store with nested telemetry, events, faults, etc.)
 API/WebSocket Clients (lib/api.ts, lib/websocket.ts)
 ```
 
-## WebSocket Protocol (Phase 2)
+## WebSocket Protocol
 
 ```json
 {
@@ -172,7 +263,29 @@ API/WebSocket Clients (lib/api.ts, lib/websocket.ts)
       "overall": "NOMINAL",
       "eps": {"status": "NOMINAL", "uptime_s": 1000},
       "obc": {"status": "NOMINAL", "uptime_s": 1000}
+    },
+    "recent_events": [...],
+    "resource_stats": {
+      "memory_mb": 45.2,
+      "degradation": "none"
     }
   }
 }
 ```
+
+## Persistence Layer
+
+SQLite database (`data/cubesat_twin.db`) stores:
+
+| Table | Contents |
+|-------|----------|
+| `observations` | All captured observations with metadata |
+| `telemetry` | Periodic telemetry snapshots |
+| `events` | Mission events with severity levels |
+| `sessions` | Replay session metadata |
+
+Resource management ensures bounded memory usage:
+- `BoundedList` — Caps in-memory collections with eviction
+- `TTLCache` — Time-based cache expiration for FIRMS/TLE data
+- `ResourceMonitor` — Tracks memory usage and triggers degradation
+- `CleanupScheduler` — Periodic cache cleanup tasks

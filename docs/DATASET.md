@@ -186,3 +186,14 @@ data/
 | `export.py` | Export to ONNX | `python scripts/ml/export.py --model data/models/best_model.pt` |
 | `benchmark.py` | Benchmark inference | `python scripts/ml/benchmark.py --model data/models/best_model.pt` |
 | `run_pipeline.py` | Run full pipeline | `python scripts/ml/run_pipeline.py --source <path>` |
+
+## Integration with Digital Twin
+
+The ML pipeline integrates with the simulation engine:
+
+1. **Mock mode** (`ML_MODE=mock`): Uses deterministic hash-based classifier — no training required
+2. **Real mode** (`ML_MODE=real`): Loads trained model from `ML_MODEL_PATH`
+
+Set `ML_MODE=real` in `.env` after training a model. The simulation falls back to mock if the model fails to load.
+
+For live AI vision analysis (external providers), see the AI Vision Pipeline section in the main README.

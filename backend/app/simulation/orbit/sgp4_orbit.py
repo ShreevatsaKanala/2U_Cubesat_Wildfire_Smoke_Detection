@@ -84,6 +84,36 @@ class SGP4OrbitService:
             logger.warning("SGP4 library not available, falling back to analytical model")
             self._init_from_altitude(DEFAULT_ALTITUDE_KM, DEFAULT_INCLINATION_DEG)
 
+    def load_tle(self, tle_line1: str, tle_line2: str) -> bool:
+        """
+        Dynamically load new TLE data after initialization.
+
+        Allows updating the orbit propagator with fresh TLE data
+        without recreating the service instance.
+
+        Args:
+            tle_line1: TLE line 1
+            tle_line2: TLE line 2
+
+        Returns:
+            True if TLE loaded successfully, False otherwise
+        """
+        try:
+            from sgp4.api import Satrec, WGS72
+            self._satrec = Satrec.twoline2rv(tle_line1, tle_line2, WGS72)
+            self._use_sgp4 = True
+            self._epoch = datetime.now(timezone.utc)
+            self._config["tle_line1"] = tle_line1
+            self._config["tle_line2"] = tle_line2
+            logger.info("SGP4 TLE updated dynamically")
+            return True
+        except ImportError:
+            logger.warning("SGP4 library not available, cannot load TLE")
+            return False
+        except Exception as e:
+            logger.warning("Failed to load TLE: %s", e)
+            return False
+
     def _init_from_keplerian(self, keplerian: dict):
         """Initialize from Keplerian orbital elements."""
         self._semi_major_axis = keplerian.get("semi_major_axis_km", R_EARTH + DEFAULT_ALTITUDE_KM)

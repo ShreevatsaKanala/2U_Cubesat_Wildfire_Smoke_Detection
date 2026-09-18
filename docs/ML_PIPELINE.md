@@ -182,6 +182,19 @@ ML_SMOKE_THRESHOLD=0.5
 ML_DEVICE=cpu             # "cpu" or "cuda"
 ```
 
+### AI Vision Integration
+
+The simulation engine also supports live AI vision analysis via external providers:
+
+```
+AI_MODE=mock              # "mock" or "live"
+AI_PROVIDER=openrouter    # "openrouter" or "groq"
+OPENROUTER_API_KEY=...    # Required if AI_MODE=live
+GROQ_API_KEY=...          # Optional failover provider
+```
+
+AI vision provides an independent smoke assessment using large vision models, complementing the local ML pipeline.
+
 ### SimulationEngine Integration
 
 The engine creates the appropriate classifier based on `ml_mode`:

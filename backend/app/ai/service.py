@@ -77,10 +77,11 @@ class AIService:
                 logger.error(f"Failed to init Groq provider: {e}")
 
         if not self._providers:
-            logger.warning("No live AI providers available, falling back to mock")
-            self._providers["mock"] = MockVisionProvider()
+            logger.warning("No live AI providers available. AI will report 'unavailable'.")
 
-    def _get_primary_provider(self) -> VisionInferenceProvider:
+    def _get_primary_provider(self) -> VisionInferenceProvider | None:
+        if not self._providers:
+            return None
         if self._ai_provider_name in self._providers:
             return self._providers[self._ai_provider_name]
         return list(self._providers.values())[0]
@@ -97,6 +98,14 @@ class AIService:
         self, image_path: str, observation_metadata: dict
     ) -> VisionInferenceResult:
         self._metrics["total_requests"] += 1
+
+        primary = self._get_primary_provider()
+        if primary is None:
+            self._metrics["failed"] += 1
+            return VisionInferenceResult(
+                ai_status="unavailable",
+                ai_error="No live AI providers configured. Set AI_MODE=mock or configure an API key.",
+            )
 
         if not self._check_rate_limit():
             self._metrics["rate_limited"] += 1
@@ -125,7 +134,6 @@ class AIService:
             "altitude_km": observation_metadata.get("altitude_km", 500.0),
         }
 
-        primary = self._get_primary_provider()
         result = self._call_provider(primary, image_base64, metadata)
 
         if result.ai_status in ("success", "timeout", "error"):

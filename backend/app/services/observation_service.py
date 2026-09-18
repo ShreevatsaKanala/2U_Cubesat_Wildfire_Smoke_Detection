@@ -14,24 +14,25 @@ class ObservationService:
     """
     Service for managing observation records.
 
-    Provides CRUD operations for observations with in-memory
-    storage for Phase 1 development and testing.
+    Provides CRUD operations for observations with bounded in-memory
+    storage that drops the oldest observations when the limit is reached.
     """
 
     def __init__(self):
-        """Initialize observation service with empty storage."""
+        """Initialize observation service with bounded storage."""
+        from app.core.config import settings
         self.observations: List = []
-        self._max_observations = 1000  # Memory limit for Phase 1
+        self._max_observations = settings.MAX_OBSERVATIONS_IN_MEMORY
+        self._dropped_count = 0
+
+    def __len__(self) -> int:
+        return len(self.observations)
 
     def store(self, observation) -> None:
         """
         Store an observation record.
 
-        Args:
-            observation: Observation object to store
-
-        Raises:
-            ValueError: If observation is None or missing required fields
+        Drops the oldest observation when the memory limit is reached.
         """
         if observation is None:
             raise ValueError("Cannot store None observation")
@@ -44,8 +45,14 @@ class ObservationService:
 
         # Enforce memory limit
         if len(self.observations) >= self._max_observations:
-            # Remove oldest observation
             self.observations.pop(0)
+            self._dropped_count += 1
+            if self._dropped_count % 20 == 1:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "Observation storage full (%d) — dropped %d total",
+                    self._max_observations, self._dropped_count,
+                )
 
         self.observations.append(observation)
 

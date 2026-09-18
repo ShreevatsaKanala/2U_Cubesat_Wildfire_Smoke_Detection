@@ -34,3 +34,10 @@ class Observation(BaseModel):
     ai_scene_description: Optional[str] = None
     ai_status: Optional[str] = None
     spacecraft_state_snapshot: Optional[dict] = None
+    # Phase 5H-I: Fire correlation fields
+    fire_correlation_score: Optional[float] = None
+    fire_correlation_details: Optional[dict] = None
+    firms_detections_nearby: int = 0
+    weather_fire_risk: Optional[float] = None
+    correlated_at: Optional[datetime] = None
+    correlated_priority: Optional[str] = None

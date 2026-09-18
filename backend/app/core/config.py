@@ -57,6 +57,18 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = "sqlite+aiosqlite:///./data/cubesat_twin.db"
 
+    # Resource limits
+    MAX_OBSERVATIONS_IN_MEMORY: int = 500
+    MAX_EVENTS_IN_MEMORY: int = 1000
+    MAX_TELEMETRY_SNAPSHOTS_IN_MEMORY: int = 200
+    MAX_DOWNLINK_QUEUE_SIZE: int = 100
+    TELEMETRY_SNAPSHOT_INTERVAL_SECONDS: float = 60.0
+    DB_WRITE_BATCH_SIZE: int = 10
+    MAX_SIM_ITERATIONS_PER_SECOND: float = 10.0
+    WEBSOCKET_BROADCAST_INTERVAL: float = 0.5
+    FIRMS_CACHE_MAX_AGE_MINUTES: int = 30
+    TLE_CACHE_MAX_AGE_HOURS: int = 24
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

@@ -255,7 +255,7 @@ def test_ai_service_unavailable_when_no_keys():
 
     service = AIService(config)
     status = service.get_status()
-    assert "mock" in status["providers"]
+    assert status["providers"] == {}
 
 
 # --- 14. AIService rate limit ---

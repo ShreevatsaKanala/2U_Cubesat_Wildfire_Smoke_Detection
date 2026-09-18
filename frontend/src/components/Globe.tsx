@@ -1,9 +1,30 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useMissionStore } from "@/stores/telemetryStore";
 import { fetchHotspots } from "@/lib/api";
 
 let Cesium: typeof import("cesium") | null = null;
+
+const GROUND_STATIONS = [
+  { name: "Boulder CO", lat: 40.015, lon: -105.2705, color: "#22c55e" },
+  { name: "Fairbanks AK", lat: 64.8378, lon: -147.7164, color: "#3b82f6" },
+  { name: "Svalbard", lat: 78.2232, lon: 15.6267, color: "#a855f7" },
+  { name: "Singapore", lat: 1.3521, lon: 103.8198, color: "#f59e0b" },
+  { name: "Punta Arenas", lat: -53.1638, lon: -70.9171, color: "#ef4444" },
+];
+
+const ELEVATION_MASK_DEG = 10;
+const MAX_ORBITS_GROUND_TRACK = 2;
+const ORBIT_PERIOD_S = 5400;
+const FIRMS_CLUSTER_THRESHOLD = 50;
+
+interface HotspotData {
+  lat: number;
+  lon: number;
+  frp: number;
+  confidence: string;
+  id?: string;
+}
 
 export default function Globe() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -12,16 +33,23 @@ export default function Globe() {
   const groundTrackRef = useRef<any>(null);
   const orbitPathRef = useRef<any>(null);
   const footprintRef = useRef<any>(null);
+  const footprintConeRef = useRef<any>(null);
   const hotspotsEntitiesRef = useRef<any[]>([]);
+  const groundStationEntitiesRef = useRef<any[]>([]);
+  const visibilityCircleEntitiesRef = useRef<any[]>([]);
   const trackPointsRef = useRef<import("cesium").Cartesian3[]>([]);
+  const trackIndexRef = useRef(0);
   const prevCamPosRef = useRef<import("cesium").Cartesian3 | null>(null);
   const initializedRef = useRef(false);
+  const userInteractingRef = useRef(false);
+  const lastUserInteractionRef = useRef(0);
+  const selectedFirmsRef = useRef<string | null>(null);
 
   const telemetry = useMissionStore((s) => s.telemetry);
   const globeView = useMissionStore((s) => s.globeView);
-  const cameraMode = useMissionStore((s) => s.cameraMode);
   const [cesiumLoaded, setCesiumLoaded] = useState(false);
-  const [hotspots, setHotspots] = useState<{ lat: number; lon: number; frp: number; confidence: string }[]>([]);
+  const [hotspots, setHotspots] = useState<HotspotData[]>([]);
+  const [selectedFirms, setSelectedFirms] = useState<HotspotData | null>(null);
 
   useEffect(() => {
     fetchHotspots().then(setHotspots).catch(() => {});
@@ -29,6 +57,23 @@ export default function Globe() {
       fetchHotspots().then(setHotspots).catch(() => {});
     }, 60000);
     return () => clearInterval(id);
+  }, []);
+
+  const trackUserInteraction = useCallback((viewer: any) => {
+    const handler = () => {
+      userInteractingRef.current = true;
+      lastUserInteractionRef.current = Date.now();
+    };
+    const stopHandler = () => {
+      setTimeout(() => {
+        if (Date.now() - lastUserInteractionRef.current > 2000) {
+          userInteractingRef.current = false;
+        }
+      }, 2000);
+    };
+    viewer.camera.changed.addEventListener(handler);
+    viewer.camera.moveStart.addEventListener(handler);
+    viewer.camera.moveEnd.addEventListener(stopHandler);
   }, []);
 
   useEffect(() => {
@@ -70,6 +115,8 @@ export default function Globe() {
         // fallback imagery
       }
 
+      trackUserInteraction(viewer);
+
       viewer.camera.flyTo({
         destination: Cesium.Cartesian3.fromDegrees(0, 20, 25000000),
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
@@ -91,11 +138,33 @@ export default function Globe() {
         },
       });
 
-      const groundTrack = viewer.entities.add({
+      const groundTrackPast = viewer.entities.add({
         polyline: {
-          positions: new Cesium.CallbackProperty(() => trackPointsRef.current, false),
-          width: 2,
-          material: new Cesium.PolylineGlowMaterialProperty({ glowPower: 0.1, color: Cesium.Color.CYAN }),
+          positions: new Cesium.CallbackProperty(() => {
+            const pts = trackPointsRef.current;
+            const idx = trackIndexRef.current;
+            return pts.slice(Math.max(0, idx - 200), idx + 1);
+          }, false),
+          width: 2.5,
+          material: new Cesium.PolylineGlowMaterialProperty({
+            glowPower: 0.15,
+            color: Cesium.Color.fromCssColorString("#22c55e"),
+          }),
+        },
+      });
+
+      const groundTrackFuture = viewer.entities.add({
+        polyline: {
+          positions: new Cesium.CallbackProperty(() => {
+            const pts = trackPointsRef.current;
+            const idx = trackIndexRef.current;
+            return pts.slice(idx, pts.length);
+          }, false),
+          width: 1.5,
+          material: new Cesium.PolylineDashMaterialProperty({
+            color: Cesium.Color.fromCssColorString("#64748b"),
+            dashLength: 8,
+          }),
         },
       });
 
@@ -117,16 +186,88 @@ export default function Globe() {
             if (!Cesium || !telemetry) return undefined;
             return computeCameraFootprint(telemetry.position.latitude, telemetry.position.longitude, telemetry.position.altitude_km);
           }, false),
-          material: Cesium.Color.YELLOW.withAlpha(0.15),
+          material: Cesium.Color.YELLOW.withAlpha(0.12),
           outline: true,
           outlineColor: Cesium.Color.YELLOW.withAlpha(0.4),
         },
       });
 
+      const footprintCone = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(0, 0, 0),
+        cylinder: {
+          length: new Cesium.CallbackProperty(() => {
+            if (!telemetry) return 0;
+            return telemetry.position.altitude_km * 1000;
+          }, false),
+          topRadius: new Cesium.CallbackProperty(() => {
+            if (!telemetry) return 0;
+            const altM = telemetry.position.altitude_km * 1000;
+            return altM * Math.tan((15 * Math.PI) / 180);
+          }, false),
+          bottomRadius: 0,
+          material: Cesium.Color.YELLOW.withAlpha(0.06),
+          outline: true,
+          outlineColor: Cesium.Color.YELLOW.withAlpha(0.2),
+          numberOfVerticalLines: 0,
+        },
+      });
+
+      if (Cesium) {
+        GROUND_STATIONS.forEach((gs) => {
+          const entity = viewer.entities.add({
+            position: Cesium!.Cartesian3.fromDegrees(gs.lon, gs.lat, 0),
+            point: {
+              pixelSize: 7,
+              color: Cesium!.Color.fromCssColorString(gs.color),
+              outlineColor: Cesium!.Color.WHITE,
+              outlineWidth: 1,
+              heightReference: Cesium!.HeightReference.CLAMP_TO_GROUND,
+            },
+            label: {
+              text: gs.name,
+              font: "10px monospace",
+              fillColor: Cesium!.Color.WHITE,
+              style: Cesium!.LabelStyle.FILL_AND_OUTLINE,
+              outlineWidth: 1,
+              verticalOrigin: Cesium!.VerticalOrigin.BOTTOM,
+              pixelOffset: new Cesium!.Cartesian2(0, -12),
+              showBackground: true,
+              backgroundColor: Cesium!.Color.fromCssColorString("#111827cc"),
+              scale: 0.9,
+            },
+          });
+          groundStationEntitiesRef.current.push(entity);
+
+          const circlePositions: import("cesium").Cartesian3[] = [];
+          const circleSteps = 64;
+          const circleRadiusDeg = 5;
+          for (let i = 0; i <= circleSteps; i++) {
+            const angle = (i / circleSteps) * 2 * Math.PI;
+            circlePositions.push(
+              Cesium!.Cartesian3.fromDegrees(
+                gs.lon + circleRadiusDeg * Math.cos(angle),
+                gs.lat + circleRadiusDeg * Math.sin(angle),
+                0
+              )
+            );
+          }
+          const circleEntity = viewer.entities.add({
+            polyline: {
+              positions: circlePositions,
+              width: 1.5,
+              material: Cesium!.Color.fromCssColorString(gs.color).withAlpha(0.35),
+              clampToGround: true,
+            },
+          });
+          visibilityCircleEntitiesRef.current.push(circleEntity);
+        });
+      }
+
       satelliteEntityRef.current = satelliteEntity;
-      groundTrackRef.current = groundTrack;
+      groundTrackRef.current = groundTrackPast;
       orbitPathRef.current = orbitPath;
       footprintRef.current = footprint;
+      footprintConeRef.current = footprintCone;
       viewerRef.current = viewer;
       setCesiumLoaded(true);
     };
@@ -152,10 +293,19 @@ export default function Globe() {
       satelliteEntityRef.current.position = pos;
     }
 
-    trackPointsRef.current.push(pos);
-    if (trackPointsRef.current.length > 200) trackPointsRef.current.shift();
+    if (footprintConeRef.current) {
+      footprintConeRef.current.position = pos;
+    }
 
-    if (globeView === "follow" || globeView === "top-down") {
+    trackPointsRef.current.push(pos);
+    trackIndexRef.current = trackPointsRef.current.length - 1;
+    const maxPoints = Math.ceil((MAX_ORBITS_GROUND_TRACK * ORBIT_PERIOD_S) / 5) * 3;
+    while (trackPointsRef.current.length > maxPoints) {
+      trackPointsRef.current.shift();
+      trackIndexRef.current = Math.max(0, trackIndexRef.current - 1);
+    }
+
+    if (!userInteractingRef.current && (globeView === "follow" || globeView === "top-down")) {
       const distance = globeView === "top-down" ? telemetry.position.altitude_km * 1000 + 2000000 : telemetry.position.altitude_km * 1000 + 5000000;
       const pitch = globeView === "top-down" ? -Math.PI / 2 : -Math.PI / 3;
       viewer.camera.flyTo({
@@ -178,19 +328,69 @@ export default function Globe() {
     hotspotsEntitiesRef.current.forEach((e) => viewer.entities.remove(e));
     hotspotsEntitiesRef.current = [];
 
-    hotspots.forEach((h) => {
-      const entity = viewer.entities.add({
-        position: C.Cartesian3.fromDegrees(h.lon, h.lat, 0),
-        point: {
-          pixelSize: Math.min(4 + h.frp / 10, 10),
-          color: C.Color.RED.withAlpha(0.7),
-          outlineColor: C.Color.ORANGE,
-          outlineWidth: 1,
+    if (hotspots.length > FIRMS_CLUSTER_THRESHOLD) {
+      const clusterEntity = viewer.entities.add({
+        position: C.Cartesian3.fromDegrees(0, 20, 0),
+        billboard: {
+          image: "data:image/svg+xml;base64," + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#ef4444" opacity="0.8"/><text x="12" y="16" text-anchor="middle" fill="white" font-size="10" font-family="monospace">' + hotspots.length + "</text></svg>"),
+          verticalOrigin: C.VerticalOrigin.CENTER,
           heightReference: C.HeightReference.CLAMP_TO_GROUND,
         },
+        label: {
+          text: hotspots.length + " fire detections",
+          font: "10px monospace",
+          fillColor: C.Color.WHITE,
+          style: C.LabelStyle.FILL_AND_OUTLINE,
+          outlineWidth: 1,
+          verticalOrigin: C.VerticalOrigin.BOTTOM,
+          pixelOffset: new C.Cartesian2(0, -16),
+          showBackground: true,
+          backgroundColor: C.Color.fromCssColorString("#7f1d1dcc"),
+        },
       });
-      hotspotsEntitiesRef.current.push(entity);
-    });
+      hotspotsEntitiesRef.current.push(clusterEntity);
+    } else {
+      hotspots.forEach((h, idx) => {
+        const entity = viewer.entities.add({
+          position: C.Cartesian3.fromDegrees(h.lon, h.lat, 0),
+          point: {
+            pixelSize: Math.min(4 + h.frp / 10, 12),
+            color: h.frp > 50 ? C.Color.RED : C.Color.ORANGE,
+            outlineColor: C.Color.YELLOW,
+            outlineWidth: 1,
+            heightReference: C.HeightReference.CLAMP_TO_GROUND,
+          },
+          label: {
+            text: `FRP: ${h.frp.toFixed(0)} MW`,
+            font: "9px monospace",
+            fillColor: C.Color.WHITE,
+            style: C.LabelStyle.FILL_AND_OUTLINE,
+            outlineWidth: 1,
+            verticalOrigin: C.VerticalOrigin.BOTTOM,
+            pixelOffset: new C.Cartesian2(0, -10),
+            showBackground: true,
+            backgroundColor: C.Color.fromCssColorString("#7f1d1dcc"),
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          },
+        });
+        (entity as any)._hotspotData = h;
+        hotspotsEntitiesRef.current.push(entity);
+      });
+    }
+
+    const handler = new C.ScreenSpaceEventHandler(viewer.scene.canvas);
+    handler.setInputAction((click: any) => {
+      const picked = viewer.scene.pick(click.position);
+      if (C.defined(picked) && C.defined(picked.id) && (picked.id as any)._hotspotData) {
+        const data = (picked.id as any)._hotspotData as HotspotData;
+        setSelectedFirms(data);
+        viewer.camera.flyTo({
+          destination: C.Cartesian3.fromDegrees(data.lon, data.lat, 2000000),
+          orientation: { heading: 0, pitch: -Math.PI / 3, roll: 0 },
+          duration: 1.5,
+        });
+      }
+    }, C.ScreenSpaceEventType.LEFT_CLICK);
   }, [hotspots]);
 
   return (
@@ -199,6 +399,20 @@ export default function Globe() {
       {!cesiumLoaded && (
         <div className="absolute inset-0 flex items-center justify-center bg-mission-dark">
           <div className="text-mission-accent text-lg font-mono">Loading Cesium...</div>
+        </div>
+      )}
+      {selectedFirms && (
+        <div className="absolute top-3 right-3 bg-mission-panel border border-mission-border rounded-lg p-3 max-w-[220px] z-10">
+          <div className="flex justify-between items-start mb-1">
+            <span className="text-xs font-semibold text-red-400 uppercase">FIRMS Detection</span>
+            <button onClick={() => setSelectedFirms(null)} className="text-slate-500 hover:text-slate-300 text-xs">&times;</button>
+          </div>
+          <div className="space-y-0.5 text-[10px] font-mono">
+            <div className="flex justify-between"><span className="text-slate-400">Lat</span><span className="text-slate-200">{selectedFirms.lat.toFixed(4)}°</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">Lon</span><span className="text-slate-200">{selectedFirms.lon.toFixed(4)}°</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">FRP</span><span className="text-red-400 font-bold">{selectedFirms.frp.toFixed(1)} MW</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">Confidence</span><span className="text-slate-200">{selectedFirms.confidence}</span></div>
+          </div>
         </div>
       )}
     </div>

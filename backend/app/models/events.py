@@ -19,6 +19,13 @@ class EventType(str, Enum):
     AI_INFERENCE_FAILED = "AI_INFERENCE_FAILED"
     AI_PROVIDER_FAILOVER = "AI_PROVIDER_FAILOVER"
     AI_UNAVAILABLE = "AI_UNAVAILABLE"
+    FAULT_RECOVERY_STARTED = "FAULT_RECOVERY_STARTED"
+    FAULT_RECOVERY_COMPLETED = "FAULT_RECOVERY_COMPLETED"
+    FAULT_RECOVERY_FAILED = "FAULT_RECOVERY_FAILED"
+    RECOVERY_ACTION_TAKEN = "RECOVERY_ACTION_TAKEN"
+    LOAD_SHEDDING = "LOAD_SHEDDING"
+    POWER_EVENT = "POWER_EVENT"
+    THERMAL_EVENT = "THERMAL_EVENT"
 
 class MissionEvent(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -32,7 +39,16 @@ class MissionEvent(BaseModel):
 
 class EventLog(BaseModel):
     events: list[MissionEvent] = []
-    max_events: int = 500
+    max_events: int = 1000  # From config: MAX_EVENTS_IN_MEMORY
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Import config limit on first use
+        try:
+            from app.core.config import settings
+            self.max_events = settings.MAX_EVENTS_IN_MEMORY
+        except Exception:
+            pass
 
     def add(self, event: MissionEvent):
         self.events.append(event)
@@ -41,3 +57,6 @@ class EventLog(BaseModel):
 
     def get_recent(self, limit: int = 50) -> list[MissionEvent]:
         return list(reversed(self.events[-limit:]))
+
+    def __len__(self) -> int:
+        return len(self.events)

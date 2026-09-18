@@ -13,6 +13,8 @@ import ObservationCenter from "@/components/ObservationCenter";
 import ObservationHistoryPanel from "@/components/ObservationHistoryPanel";
 import MissionEventsPanel from "@/components/MissionEventsPanel";
 import GroundStationPanel from "@/components/GroundStationPanel";
+import GroundNetworkPanel from "@/components/GroundNetworkPanel";
+import FIRMSOverlayPanel from "@/components/FIRMSOverlayPanel";
 import DownlinkQueuePanel from "@/components/DownlinkQueuePanel";
 import EnvironmentPanel from "@/components/EnvironmentPanel";
 import SimulationClock from "@/components/SimulationClock";
@@ -27,14 +29,14 @@ export default function MissionControl() {
   useTelemetrySocket();
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="h-screen flex flex-col overflow-hidden">
       {/* Header */}
       <header className="bg-mission-panel border-b border-mission-border px-4 py-2 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <h1 className="text-sm font-semibold tracking-wide text-slate-100">
             <span className="text-mission-accent">CUBESAT</span> DIGITAL TWIN
           </h1>
-          <span className="text-[10px] text-slate-500 border border-mission-border rounded px-1.5 py-0.5">Phase 2</span>
+          <span className="text-[10px] text-slate-500 border border-mission-border rounded px-1.5 py-0.5">Phase 5</span>
         </div>
         <div className="flex items-center gap-3">
           <ConnectionIndicator />
@@ -46,37 +48,45 @@ export default function MissionControl() {
         {/* Left sidebar - Spacecraft Status */}
         <aside className="w-64 overflow-y-auto p-2 space-y-2 border-r border-mission-border bg-mission-dark shrink-0">
           <SpacecraftStatus />
-          <MissionControls />
-          <AIStatusPanel />
-          <FaultInjectionPanel />
-        </aside>
-
-        {/* Center - Globe */}
-        <main className="flex-1 flex flex-col min-w-0">
-          <div className="flex-1 relative">
-            <Globe />
-          </div>
-          <LiveTelemetry />
-        </main>
-
-        {/* Right sidebar - Panels */}
-        <aside className="w-72 overflow-y-auto p-2 space-y-2 border-l border-mission-border bg-mission-dark shrink-0">
           <PowerPanel />
           <ThermalPanel />
           <HealthPanel />
+        </aside>
+
+        {/* Center - Globe */}
+        <main className="flex-1 min-w-0">
+          <Globe />
+        </main>
+
+        {/* Right sidebar - Operations */}
+        <aside className="w-72 overflow-y-auto p-2 space-y-2 border-l border-mission-border bg-mission-dark shrink-0">
+          <MissionControls />
+          <ObservationCenter />
+          <AIStatusPanel />
+          <GroundNetworkPanel />
+          <FIRMSOverlayPanel />
           <EnvironmentPanel />
           <GroundStationPanel />
           <DownlinkQueuePanel />
-          <ObservationCenter />
           <ObservationHistoryPanel />
           <ModelComparisonPanel />
           <DatasetInspectorPanel />
-          <MissionEventsPanel />
+          <FaultInjectionPanel />
         </aside>
       </div>
 
-      {/* Bottom - Simulation Clock */}
-      <SimulationClock />
+      {/* Bottom - Timeline, Telemetry Log, Events */}
+      <div className="border-t border-mission-border bg-mission-panel shrink-0 h-52 flex">
+        <div className="flex-1 overflow-y-auto p-2">
+          <LiveTelemetry />
+        </div>
+        <div className="border-l border-mission-border flex-1 overflow-y-auto p-2">
+          <MissionEventsPanel />
+        </div>
+        <div className="border-l border-mission-border">
+          <SimulationClock />
+        </div>
+      </div>
     </div>
   );
 }

@@ -4,9 +4,10 @@ from app.models.telemetry import TelemetryPacket
 
 class TelemetryService:
     def __init__(self):
+        from app.core.config import settings
         self.latest_telemetry: Optional[TelemetryPacket] = None
         self.telemetry_history: list[TelemetryPacket] = []
-        self.max_history: int = 1000
+        self.max_history: int = settings.MAX_TELEMETRY_SNAPSHOTS_IN_MEMORY
 
     def update(self, telemetry: TelemetryPacket) -> None:
         self.latest_telemetry = telemetry

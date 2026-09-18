@@ -15,44 +15,89 @@ probability/confidence → image priority → telemetry/downlink → ground dash
 
 The AI system identifies **probable** smoke/wildfire signatures, outputs probability/confidence, and assigns an observation priority. Smoke, clouds, haze, dust, shadows, and atmospheric effects can produce visually similar patterns, so the system reflects uncertainty in all outputs.
 
-## Architecture
+## Features
+
+### What Works (Phases 1-5)
+
+- **SGP4 Orbit Propagation** — CelesTrak TLE integration with analytical fallback
+- **Camera Simulation** — Synthetic Earth observation image generation
+- **ML Pipeline** — Onboard smoke detection (mock + real with training scripts)
+- **Live AI Vision** — External vision inference via OpenRouter/Groq with failover
+- **FIRMS + Weather Correlation** — Fire detection fusion with weighted probability
+- **5-Station Ground Network** — Global coverage with pass detection and visibility
+- **Downlink Simulation** — Priority-ordered queue with realistic transfer
+- **Autonomous Fault Recovery** — Self-healing with retries and cooldown
+- **EPS Model** — Per-subsystem power consumption and load shedding
+- **Thermal Model** — 5-node thermal simulation with safe ranges
+- **SQLite Persistence** — Full observation/telemetry/event database
+- **Replay & Export** — Session recording, playback, and data export
+- **3D Dashboard** — CesiumJS globe with ground track, FIRMS overlay, camera footprint
+
+### What's Simulated (Not Real Hardware)
+
+- Orbital mechanics (mathematical models)
+- Camera images (gradient + terrain simulation)
+- ML classification (mock classifier or trained model inference)
+- Ground station passes (geometry-based visibility)
+- Power/thermal dynamics (physics-based models)
+
+## Roadmap
+
+| Status | Item |
+|--------|------|
+| ✅ | Digital twin simulation (Phases 1-5) |
+| ✅ | Onboard ML pipeline (mock + real with training scripts) |
+| ✅ | Live AI vision analysis (OpenRouter/Groq) |
+| ✅ | Persistence, replay, export |
+| ✅ | Ground network, downlink simulation |
+| ✅ | Fault recovery, EPS, thermal modeling |
+| 🔜 | Raspberry Pi 5 deployment |
+| 🔜 | Real camera hardware integration |
+| 🔜 | Custom trained smoke detection model |
+| 🔜 | Actual ground station hardware |
+
+## Tech Stack
+
+![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-green?logo=fastapi)
+![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)
+![CesiumJS](https://img.shields.io/badge/CesiumJS-1.115-blue)
+![SQLite](https://img.shields.io/badge/SQLite-3-orange?logo=sqlite)
+![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-ee4c2c?logo=pytorch)
+
+## Project Structure
 
 ```
 /
-├── backend/        Python FastAPI backend + simulation engine
-├── frontend/       Next.js + CesiumJS mission-control dashboard
-├── simulation/     Shared simulation configurations
-├── docs/           Technical documentation
-├── data/           Observation images and persistence
-├── scripts/        Utility scripts
+├── backend/                  Python FastAPI backend
+│   ├── app/
+│   │   ├── main.py           Application entry + WebSocket
+│   │   ├── core/             Config, database, resource manager
+│   │   ├── api/v1/           21 REST route modules
+│   │   ├── models/           Pydantic schemas
+│   │   ├── services/         17 service modules
+│   │   ├── simulation/       Engine, orbit, camera
+│   │   ├── ml/               Inference interface + mock
+│   │   ├── ai/               Vision AI providers + service
+│   │   └── adapters/         External API clients
+│   ├── tests/                pytest test suite
+│   └── requirements.txt
+├── frontend/                 Next.js + CesiumJS dashboard
+│   ├── src/
+│   │   ├── app/              Pages and layout
+│   │   ├── components/       16 mission control panels
+│   │   ├── lib/              API + WebSocket clients
+│   │   └── stores/           Zustand state management
+│   └── package.json
+├── simulation/               Shared configurations
+├── docs/                     Technical documentation
+├── data/                     Observations and persistence
+├── scripts/                  ML training pipeline
 ├── docker-compose.yml
 └── .env.example
 ```
 
-### Backend Stack
-
-- **Python 3.11+** with FastAPI
-- Pydantic for typed schemas
-- WebSocket for live telemetry
-- SGP4 orbit propagation (with analytical fallback)
-- Pluggable ML inference interface
-- External API adapters (NASA FIRMS, Open-Meteo, CelesTrak, NASA GIBS)
-- Power model (coulomb counting, eclipse detection)
-- Thermal model (multi-node radiative)
-- Fault injection system
-- Ground station pass detection
-- Downlink queue management
-
-### Frontend Stack
-
-- **Next.js 14** with TypeScript
-- Tailwind CSS for mission-control dark theme
-- CesiumJS for 3D Earth visualisation
-- Zustand for state management
-- WebSocket client for live telemetry
-- 16 mission control panels
-
-## Setup
+## Quick Start
 
 ### Prerequisites
 
@@ -60,22 +105,23 @@ The AI system identifies **probable** smoke/wildfire signatures, outputs probabi
 - Node.js 18+
 - npm or yarn
 
-### Environment Variables
+### 1. Configure Environment
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` and fill in:
+Edit `.env` — all external API keys are optional (system degrades gracefully):
 
 | Variable | Description |
-|---|---|
+|----------|-------------|
 | `NASA_FIRMS_MAP_KEY` | NASA FIRMS API key for wildfire hotspot data |
 | `NEXT_PUBLIC_CESIUM_TOKEN` | Cesium Ion access token for 3D globe imagery |
+| `AI_MODE` | `mock` (local) or `live` (external vision AI) |
+| `OPENROUTER_API_KEY` | OpenRouter API key (if `AI_MODE=live`) |
+| `GROQ_API_KEY` | Groq API key (if `AI_MODE=live`) |
 
-The system works **without** external API keys — adapters gracefully degrade.
-
-### Backend
+### 2. Start Backend
 
 ```bash
 cd backend
@@ -83,7 +129,7 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### Frontend
+### 3. Start Frontend
 
 ```bash
 cd frontend
@@ -91,70 +137,105 @@ npm install
 npm run dev
 ```
 
+### 4. Access
+
+- **Dashboard**: http://localhost:3000
+- **API Docs**: http://localhost:8000/docs
+- **API Base**: http://localhost:8000
+
 ### Docker
 
 ```bash
 docker-compose up --build
 ```
 
-- Backend: http://localhost:8000
-- Frontend: http://localhost:3000
+## API Overview
 
-## API Endpoints
+### Core Simulation
 
-| Method | Path | Description |
-|---|---|---|
+| Method | Endpoint | Description |
+|--------|----------|-------------|
 | GET | `/api/v1/health` | Health check |
-| GET | `/api/v1/config` | Spacecraft and simulation configuration |
-| GET | `/api/v1/spacecraft/state` | Full spacecraft state |
-| GET | `/api/v1/spacecraft/health` | Subsystem health status |
-| GET | `/api/v1/spacecraft/power` | Power subsystem state |
-| GET | `/api/v1/spacecraft/thermal` | Thermal node temperatures |
-| GET | `/api/v1/spacecraft/attitude` | ADCS attitude state |
-| GET | `/api/v1/telemetry/latest` | Latest telemetry packet |
-| GET | `/api/v1/observations` | Paginated observation list |
-| GET | `/api/v1/observations/{id}` | Get specific observation |
-| GET | `/api/v1/events` | Mission event log |
-| GET | `/api/v1/ground-station/status` | Ground station pass status |
-| GET | `/api/v1/ground-station/config` | Ground station configuration |
-| GET | `/api/v1/downlink/status` | Downlink queue status |
-| GET | `/api/v1/faults` | Current fault states |
-| POST | `/api/v1/faults/inject` | Inject faults |
-| POST | `/api/v1/faults/clear` | Clear all faults |
+| GET | `/api/v1/config` | Spacecraft and simulation config |
 | POST | `/api/v1/simulation/start` | Start simulation |
 | POST | `/api/v1/simulation/stop` | Stop simulation |
 | POST | `/api/v1/simulation/reset` | Reset simulation |
-| GET | `/api/v1/environment/weather` | Weather data (Open-Meteo) |
-| GET | `/api/v1/environment/air-quality` | Air quality data |
-| GET | `/api/v1/environment/hotspots` | FIRMS wildfire hotspots |
-| WS | `/ws/telemetry` | Live telemetry WebSocket |
 
-## Simulator Controls
+### Observations
 
-- **START** — Begin simulation loop (orbit propagation, observations, telemetry)
-- **STOP** — Pause simulation
-- **RESET** — Reset to initial state
-- Speed: Configurable via frontend controls (1x, 5x, 10x, 50x)
-- Orbit mode: LEO, SSO, GEO presets
-- Camera modes: Follow, Top-down, Free
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/observations/capture` | Trigger observation |
+| GET | `/api/v1/observations` | List observations |
+| GET | `/api/v1/observations/{id}` | Get observation |
 
-## Testing
+### AI Analysis
 
-```bash
-cd backend
-python -m pytest tests/ -v
-```
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/ai/status` | AI service status |
+| POST | `/api/v1/ai/analyze` | Analyze image |
 
-88 tests (5 skipped if torch not installed) covering:
-- Model validation, orbit propagation, ML classification, priority calculation
-- API endpoints (health, config, spacecraft, observations, events, ground station, downlink, faults, simulation, environment)
-- ML pipeline (preprocessing, postprocessing, metrics, model registry, classifier integration)
-- AI vision providers (mock, OpenRouter, Groq, preprocessing, service, failover, rate limiting)
-- External adapters
+### Ground Network
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/ground-station/network` | Station list |
+| GET | `/api/v1/ground-station/visibility` | Visibility windows |
+| GET | `/api/v1/ground-station/status` | Current pass status |
+
+### Downlink
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/downlink/status` | Queue status |
+| GET | `/api/v1/downlink/queue` | Queue contents |
+| POST | `/api/v1/downlink/schedule` | Schedule downlink |
+
+### FIRMS & Correlation
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/firms/status` | FIRMS adapter status |
+| GET | `/api/v1/correlation/status` | Correlation status |
+| POST | `/api/v1/correlation/analyze` | Trigger correlation |
+
+### Recovery & Subsystems
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/recovery/status` | Fault recovery status |
+| POST | `/api/v1/recovery/trigger` | Trigger recovery |
+| GET | `/api/v1/eps/status` | EPS power status |
+| GET | `/api/v1/thermal/status` | Thermal model status |
+| GET | `/api/v1/tle/status` | TLE service status |
+| POST | `/api/v1/tle/refresh` | Refresh TLE data |
+
+### History & Export
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/history/observations` | Observation history |
+| GET | `/api/v1/history/telemetry` | Telemetry history |
+| GET | `/api/v1/history/events` | Event history |
+| GET | `/api/v1/export/observations` | Export observations (JSON/CSV) |
+| GET | `/api/v1/export/telemetry` | Export telemetry |
+
+### Replay
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/replay/sessions` | List sessions |
+| POST | `/api/v1/replay/playback` | Start playback |
+
+### System
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/system/resources` | System resource stats |
+| WS | `/ws/telemetry` | Live telemetry stream |
 
 ## AI Vision Pipeline
-
-Phase 4 integrates live external vision AI for smoke detection:
 
 ```bash
 # Mock mode (no API key needed)
@@ -176,21 +257,9 @@ AI_PROVIDER=openrouter
 AI_FAILOVER_ENABLED=true
 ```
 
-### AI Smoke Score
-
 The external vision AI returns an **AI Smoke Score** (0-1). This is NOT a calibrated probability of wildfire. It is an AI-generated assessment used for mission decision support.
 
-### Architecture
-
-```
-Camera → RGB Image → Preprocessing → Base64 → Vision AI Provider
-    → Structured JSON → Pydantic Validation → AI Smoke Score
-    → Priority Calculator → Observation → Downlink Queue → Dashboard
-```
-
-Providers: OpenRouter (primary) → Groq (failover) → Mock (offline)
-
-## ML Pipeline
+## ML Training Pipeline
 
 ```bash
 # Prepare dataset
@@ -208,9 +277,6 @@ python scripts/ml/evaluate.py --model data/models/best_model.pt --data data/spli
 # Export
 python scripts/ml/export.py --model data/models/best_model.pt --format onnx
 
-# Benchmark
-python scripts/ml/benchmark.py --model data/models/best_model.pt
-
 # Full pipeline
 python scripts/ml/run_pipeline.py --source <data_path>
 ```
@@ -220,47 +286,26 @@ Set `ML_MODE=real` in `.env` to use trained model. Default is `ML_MODE=mock`.
 ## External Integrations
 
 | Service | Purpose | Required? |
-|---|---|---|
+|---------|---------|-----------|
 | NASA FIRMS | Wildfire hotspot detection | No (graceful fallback) |
 | Open-Meteo | Weather and air quality | No (graceful fallback) |
 | CelesTrak | Satellite TLE data | No (uses default orbit) |
-| NASA GIBS | Satellite imagery layers | No (URL construction only) |
+| OpenRouter | Vision AI inference | No (mock mode) |
+| Groq | Vision AI inference | No (mock mode) |
 
-## Digital Twin Domains
+## Testing
 
-Phase 4 adds live external vision AI:
+```bash
+cd backend
+python -m pytest tests/ -v
+```
 
-1. **Mission/Orbit** — SGP4 propagation with configurable orbital parameters
-2. **Spacecraft State** — Full state vector with power, thermal, attitude
-3. **Power Subsystem** — Coulomb counting, eclipse detection, solar generation
-4. **Thermal Subsystem** — Multi-node thermal with safe range tracking
-5. **ADCS** — NADIR, SUN_SYNC, INERTIAL attitude modes
-6. **Camera/Payload** — Synthetic image generation with terrain simulation
-7. **AI Vision Pipeline** — Live external vision AI (OpenRouter/Groq) with failover
-8. **ML Pipeline** — Preprocessing, training, evaluation, threshold calibration, ONNX export
-9. **Mission Decision Logic** — Weighted priority calculation (CRITICAL/HIGH/MEDIUM/LOW)
-10. **Fault Management** — Inject/clear battery, camera, ADCS, comms, eclipse faults
-11. **Ground Station** — Pass detection, visibility, elevation/azimuth calculation
-12. **Downlink** — Priority-ordered queue with transmission tracking
-13. **Mission Events** — Event logging with severity levels
-14. **Telemetry** — Typed packets with live WebSocket streaming
-15. **Ground Dashboard** — 3D Cesium globe with ground track, FIRMS, camera footprint
-
-## Roadmap
-
-- [x] Replace mock classifier with real lightweight CNN/MobileNet/ONNX model
-- [x] Integrate live external vision AI (OpenRouter/Groq)
-- [ ] Add real TLE loading from CelesTrak
-- [ ] SQLite/PostgreSQL persistence layer
-- [ ] Observation image downlink simulation
-- [ ] Multi-station ground network
-- [ ] FIRMS hotspot overlay on Cesium globe (live)
-- [ ] Autonomous fault recovery logic
-- [ ] Subsystem-level EPS depth
-- [ ] Detailed thermal model improvement
-- [ ] Replay/export functionality
-- [ ] Raspberry Pi 5 deployment and benchmarking
-- [ ] Real dataset acquisition and training
+88 tests covering:
+- Model validation, orbit propagation, ML classification, priority calculation
+- API endpoints (all 21 route modules)
+- ML pipeline (preprocessing, postprocessing, metrics, model registry)
+- AI vision providers (mock, OpenRouter, Groq, preprocessing, failover, rate limiting)
+- External adapters (FIRMS, weather, CelesTrak)
 
 ## Security
 

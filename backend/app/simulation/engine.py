@@ -1,8 +1,10 @@
 """Simulation Engine for CubeSat Digital Twin Phase 3."""
 from datetime import datetime, timezone, timedelta
+import concurrent.futures
 import math
 import random
 import logging
+import threading
 from typing import Optional
 
 from app.models.spacecraft import (
@@ -16,10 +18,12 @@ from app.models.events import MissionEvent, EventType, EventLog
 from app.models.ground_station import GroundStationConfig, GroundPass
 from app.models.downlink import DownlinkItem, DownlinkQueue
 from app.simulation.orbit.sgp4_orbit import SGP4OrbitService
+from app.services.tle_service import TLEService
 from app.ml.mock_classifier import MockClassifier
 from app.simulation.camera import CameraSimulator
 from app.services.observation_service import ObservationService
 from app.services.priority import PriorityCalculator
+from app.services.persistence_service import persistence_service
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +36,17 @@ class SimulationEngine:
         # Store original config for reset
         self._original_config = sim_config.copy()
         
+        # TLE Service
+        norad_id = sim_config.get("norad_id", "55000")
+        self.tle_service = TLEService(norad_id=norad_id)
+        
         # Orbit
-        self.orbit_service = SGP4OrbitService(sim_config.get("orbit", {}))
+        orbit_config = sim_config.get("orbit", {})
+        tle_l1, tle_l2 = self.tle_service.initialize()
+        if tle_l1 and tle_l2 and not orbit_config.get("tle_line1"):
+            orbit_config["tle_line1"] = tle_l1
+            orbit_config["tle_line2"] = tle_l2
+        self.orbit_service = SGP4OrbitService(orbit_config)
         self.orbit_mode = sim_config.get("orbit_mode", "analytical")
         
         # ML / Camera
@@ -41,14 +54,16 @@ class SimulationEngine:
         self._ai_mode = sim_config.get("ai_mode", "mock")
         self.classifier = self._create_classifier()
         self._ai_service = None
+        self._ai_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        self._ai_pending_lock = threading.Lock()
+        self._ai_pending_results = {}
         if self._ai_mode == "live":
             try:
                 from app.ai.service import AIService
                 from app.core.config import settings
                 self._ai_service = AIService(settings)
             except Exception as e:
-                logger.error(f"Failed to init AIService: {e}. Falling back to mock classifier.")
-                self._ai_mode = "mock"
+                logger.error(f"Failed to init AIService: {e}. AI will report 'unavailable'.")
         self.camera = CameraSimulator(sim_config.get("camera", {}))
         self.observation_service = ObservationService()
         self.priority_calculator = PriorityCalculator()
@@ -68,6 +83,13 @@ class SimulationEngine:
         self.packet_sequence = 0
         self.current_observation_id: Optional[str] = None
         self._state = self._create_initial_state()
+        # Persistence: periodic telemetry snapshot every N sim-seconds
+        from app.core.config import settings
+        self._telemetry_snapshot_interval = sim_config.get(
+            "telemetry_snapshot_interval", settings.TELEMETRY_SNAPSHOT_INTERVAL_SECONDS
+        )
+        self._last_telemetry_snapshot_time: Optional[datetime] = None
+        self._max_downlink_queue = settings.MAX_DOWNLINK_QUEUE_SIZE
 
     def _create_classifier(self):
         """Create classifier based on ML_MODE setting."""
@@ -152,6 +174,8 @@ class SimulationEngine:
         sim_dt = dt_seconds * self.sim_speed
         self.sim_time += timedelta(seconds=sim_dt)
         self.packet_sequence += 1
+
+        self._flush_ai_pending()
         
         # Update orbit
         orbit_pos = self.orbit_service.update(self.sim_time)
@@ -182,6 +206,9 @@ class SimulationEngine:
         
         # Check observations
         self._check_observation()
+        
+        # Persist telemetry snapshot periodically
+        self._persist_telemetry_if_due()
         
         # Update mission mode
         self._update_mission_mode()
@@ -352,6 +379,20 @@ class SimulationEngine:
             q.total_bytes += item.image_size_bytes
             self._add_event(EventType.DOWNLINK_COMPLETED,
                           f"Observation {item.observation_id} downlinked", "info")
+            # Persist downlink record
+            try:
+                import asyncio
+                loop = asyncio.get_running_loop()
+                loop.create_task(persistence_service.save_downlink({
+                    "observation_id": item.observation_id,
+                    "station_id": self.ground_station.name,
+                    "start_time": item.queued_at.isoformat(),
+                    "end_time": self.sim_time.isoformat(),
+                    "status": "transmitted",
+                    "bytes_transferred": item.image_size_bytes,
+                }))
+            except RuntimeError:
+                pass
 
     def _check_observation(self):
         if self._state.faults.camera_failure:
@@ -362,6 +403,83 @@ class SimulationEngine:
         else:
             if (self.sim_time - self.last_observation_time).total_seconds() >= self.observation_interval:
                 self._trigger_observation()
+
+    def _flush_ai_pending(self):
+        with self._ai_pending_lock:
+            pending = dict(self._ai_pending_results)
+            self._ai_pending_results.clear()
+        for obs_id, (result, obs) in pending.items():
+            confidence_map = {"low": 0.3, "medium": 0.6, "high": 0.9}
+            ai_fields = {
+                "ai_provider": result.ai_provider,
+                "ai_model": result.ai_model,
+                "ai_smoke_score": result.smoke_score,
+                "ai_confidence": result.confidence,
+                "ai_visual_evidence": result.visual_evidence,
+                "ai_alternative_explanations": result.alternative_explanations,
+                "ai_scene_description": result.scene_description,
+                "ai_status": result.ai_status,
+            }
+            if result.ai_status == "success":
+                obs.smoke_probability = result.smoke_score
+                obs.confidence = confidence_map.get(result.confidence, 0.5)
+                obs.wildfire_probability = result.smoke_score * 0.8
+                self._add_event(
+                    EventType.AI_INFERENCE_COMPLETED,
+                    f"Live AI inference completed for {obs_id}: smoke_score={result.smoke_score:.3f}",
+                    "info",
+                )
+            else:
+                self._add_event(
+                    EventType.AI_INFERENCE_FAILED,
+                    f"Live AI inference failed for {obs_id}: {result.ai_error}",
+                    "warning",
+                )
+            self.observation_service.store(obs)
+            self._state.smoke_probability = obs.smoke_probability
+            self._state.confidence = obs.confidence
+            self._state.priority = obs.priority
+            self._state.ai_status = ai_fields.get("ai_status")
+            self._state.ai_provider = ai_fields.get("ai_provider")
+            self._state.ai_model = ai_fields.get("ai_model")
+            self._state.ai_smoke_score = ai_fields.get("ai_smoke_score")
+            self._state.ai_confidence = ai_fields.get("ai_confidence")
+            self._state.ai_latency_ms = result.ai_latency_ms
+            self._state.ml_status = "live" if result.ai_status == "success" else "error"
+            if self.downlink_queue.get_queue_size() < self._max_downlink_queue:
+                self.downlink_queue.enqueue(DownlinkItem(
+                    observation_id=obs_id,
+                    priority=obs.priority,
+                    image_size_bytes=(obs.image_width or 1920) * (obs.image_height or 1080) * 3,
+                ))
+            self._add_event(EventType.OBSERVATION_COMPLETED,
+                           f"Observation {obs_id} completed (AI) - Priority: {obs.priority}", "info")
+            # Persist observation and AI analysis to database
+            try:
+                import asyncio
+                loop = asyncio.get_running_loop()
+                loop.create_task(persistence_service.save_observation(obs.model_dump(mode="json")))
+                loop.create_task(persistence_service.save_ai_analysis({
+                    "observation_id": obs_id,
+                    "provider": result.ai_provider,
+                    "model": result.ai_model,
+                    "score": result.smoke_score,
+                    "raw_response": result.model_dump(mode="json"),
+                    "latency_ms": result.ai_latency_ms,
+                    "timestamp": self.sim_time.isoformat(),
+                }))
+            except RuntimeError:
+                pass
+
+    def _run_ai_background(self, observation_id, image_path, metadata, capture, obs):
+        try:
+            ai_result = self._ai_service.analyze_observation(image_path, metadata)
+        except Exception as e:
+            logger.error(f"Background AI inference failed: {e}")
+            from app.ai.schemas import VisionInferenceResult
+            ai_result = VisionInferenceResult(ai_status="error", ai_error=str(e))
+        with self._ai_pending_lock:
+            self._ai_pending_results[observation_id] = (ai_result, obs)
 
     def _trigger_observation(self) -> Observation:
         ts = self.sim_time.strftime("%Y%m%d-%H%M%S")
@@ -376,6 +494,7 @@ class SimulationEngine:
         
         self._state.ml_status = "processing"
         ai_fields = {}
+        cls_result = {}
         try:
             if self._ai_mode == "live" and self._ai_service:
                 self._add_event(
@@ -383,49 +502,70 @@ class SimulationEngine:
                     f"Live AI inference started for {observation_id}",
                     "info",
                 )
-                ai_result = self._ai_service.analyze_observation(
-                    capture["image_path"],
-                    {
-                        "observation_id": observation_id,
-                        "latitude": self._state.latitude,
-                        "longitude": self._state.longitude,
-                        "altitude_km": self._state.altitude_km,
-                    },
+                metadata = {
+                    "observation_id": observation_id,
+                    "latitude": self._state.latitude,
+                    "longitude": self._state.longitude,
+                    "altitude_km": self._state.altitude_km,
+                }
+                obs = Observation(
+                    observation_id=observation_id,
+                    timestamp=self.sim_time,
+                    spacecraft_id=self._state.spacecraft_id,
+                    latitude=self._state.latitude,
+                    longitude=self._state.longitude,
+                    altitude_km=self._state.altitude_km,
+                    image_path=capture["image_path"],
+                    image_width=capture["width"],
+                    image_height=capture["height"],
+                    capture_mode=capture.get("capture_mode", "synthetic"),
+                    camera_status="nominal",
+                    model_name="pending",
+                    model_version="pending",
+                    smoke_probability=0.0,
+                    wildfire_probability=0.0,
+                    confidence=0.0,
+                    priority="LOW",
+                    inference_latency_ms=0.0,
+                    processing_status="pending_ai",
+                    spacecraft_state_snapshot=self._state.model_dump(mode="json"),
                 )
-                confidence_map = {"low": 0.3, "medium": 0.6, "high": 0.9}
+                self._ai_executor.submit(
+                    self._run_ai_background, observation_id, capture["image_path"],
+                    metadata, capture, obs
+                )
                 cls_result = {
-                    "smoke_probability": ai_result.smoke_score,
-                    "wildfire_probability": ai_result.smoke_score * 0.8,
-                    "confidence": confidence_map.get(ai_result.confidence, 0.5),
-                    "model_name": ai_result.ai_provider,
-                    "model_version": ai_result.ai_model,
-                    "inference_latency_ms": ai_result.ai_latency_ms,
-                    "processing_status": ai_result.ai_status,
+                    "smoke_probability": 0.0,
+                    "wildfire_probability": 0.0,
+                    "confidence": 0.0,
+                    "model_name": "pending",
+                    "model_version": "pending",
+                    "inference_latency_ms": 0.0,
+                    "processing_status": "pending_ai",
                 }
-                self._state.ml_status = "live" if ai_result.ai_status == "success" else "error"
-                if ai_result.ai_status == "success":
-                    self._add_event(
-                        EventType.AI_INFERENCE_COMPLETED,
-                        f"Live AI inference completed for {observation_id}: "
-                        f"smoke_score={ai_result.smoke_score:.3f}",
-                        "info",
-                    )
-                else:
-                    self._add_event(
-                        EventType.AI_INFERENCE_FAILED,
-                        f"Live AI inference failed for {observation_id}: {ai_result.ai_error}",
-                        "warning",
-                    )
+                self._state.ml_status = "processing"
+                return None
+            elif self._ai_mode == "live" and not self._ai_service:
+                cls_result = {
+                    "smoke_probability": 0.0,
+                    "wildfire_probability": 0.0,
+                    "confidence": 0.0,
+                    "model_name": "unavailable",
+                    "model_version": "0.0.0",
+                    "inference_latency_ms": 0.0,
+                    "processing_status": "unavailable",
+                }
                 ai_fields = {
-                    "ai_provider": ai_result.ai_provider,
-                    "ai_model": ai_result.ai_model,
-                    "ai_smoke_score": ai_result.smoke_score,
-                    "ai_confidence": ai_result.confidence,
-                    "ai_visual_evidence": ai_result.visual_evidence,
-                    "ai_alternative_explanations": ai_result.alternative_explanations,
-                    "ai_scene_description": ai_result.scene_description,
-                    "ai_status": ai_result.ai_status,
+                    "ai_status": "unavailable",
+                    "ai_provider": "",
+                    "ai_model": "",
+                    "ai_smoke_score": 0.0,
+                    "ai_confidence": "low",
+                    "ai_visual_evidence": [],
+                    "ai_alternative_explanations": [],
+                    "ai_scene_description": "",
                 }
+                self._state.ml_status = "unavailable"
             else:
                 cls_result = self.classifier.classify(capture["image_path"])
                 ai_fields = {}
@@ -493,12 +633,21 @@ class SimulationEngine:
                        f"Priority set to {priority} for {observation_id}",
                        "warning" if priority in ("HIGH", "CRITICAL") else "info")
         
+        # Persist observation to database
+        try:
+            import asyncio
+            loop = asyncio.get_running_loop()
+            loop.create_task(persistence_service.save_observation(obs.model_dump(mode="json")))
+        except RuntimeError:
+            pass
+        
         # Queue for downlink
-        self.downlink_queue.enqueue(DownlinkItem(
-            observation_id=observation_id,
-            priority=priority,
-            image_size_bytes=capture.get("width", 1920) * capture.get("height", 1080) * 3,
-        ))
+        if self.downlink_queue.get_queue_size() < self._max_downlink_queue:
+            self.downlink_queue.enqueue(DownlinkItem(
+                observation_id=observation_id,
+                priority=priority,
+                image_size_bytes=capture.get("width", 1920) * capture.get("height", 1080) * 3,
+            ))
         
         return obs
 
@@ -520,6 +669,21 @@ class SimulationEngine:
         else:
             self._state.mission_mode = MissionMode.IDLE
 
+    def _persist_telemetry_if_due(self):
+        if self._last_telemetry_snapshot_time is None:
+            self._last_telemetry_snapshot_time = self.sim_time
+            return
+        elapsed = (self.sim_time - self._last_telemetry_snapshot_time).total_seconds()
+        if elapsed >= self._telemetry_snapshot_interval:
+            self._last_telemetry_snapshot_time = self.sim_time
+            try:
+                import asyncio
+                loop = asyncio.get_running_loop()
+                pkt = self.get_latest_telemetry()
+                loop.create_task(persistence_service.save_telemetry(pkt.model_dump(mode="json")))
+            except RuntimeError:
+                pass
+
     def _add_event(self, event_type: EventType, description: str, severity: str = "info", subsystem: str = None):
         event = MissionEvent(
             event_id=f"EVT-{self.packet_sequence:06d}",
@@ -530,6 +694,13 @@ class SimulationEngine:
             subsystem=subsystem,
         )
         self.event_log.add(event)
+        # Persist to database (fire-and-forget)
+        try:
+            import asyncio
+            loop = asyncio.get_running_loop()
+            loop.create_task(persistence_service.save_event(event.model_dump(mode="json")))
+        except RuntimeError:
+            pass  # No event loop running (e.g. during tests)
 
     def get_state(self) -> SpacecraftState:
         return self._state
