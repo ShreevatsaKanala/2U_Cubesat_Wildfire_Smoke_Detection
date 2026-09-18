@@ -3,7 +3,7 @@
 from fastapi import APIRouter
 from app.core.config import settings
 
-router = APIRouter(prefix="/api/ai", tags=["ai"])
+router = APIRouter(prefix="/api/v1/ai", tags=["ai"])
 
 
 @router.get("/status")

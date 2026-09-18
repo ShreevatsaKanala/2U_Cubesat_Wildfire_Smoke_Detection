@@ -12,7 +12,7 @@ from app.services.export_service import export_service
 router = APIRouter()
 
 
-@router.get("/api/history/observations")
+@router.get("/api/v1/history/observations")
 async def history_observations(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
@@ -33,7 +33,7 @@ async def history_observations(
     return {"observations": rows, "total": total, "limit": limit, "offset": offset}
 
 
-@router.get("/api/history/telemetry")
+@router.get("/api/v1/history/telemetry")
 async def history_telemetry(
     limit: int = Query(100, ge=1, le=2000),
     offset: int = Query(0, ge=0),
@@ -46,7 +46,7 @@ async def history_telemetry(
     return {"telemetry": rows, "limit": limit, "offset": offset}
 
 
-@router.get("/api/history/events")
+@router.get("/api/v1/history/events")
 async def history_events(
     limit: int = Query(100, ge=1, le=2000),
     offset: int = Query(0, ge=0),
@@ -66,12 +66,12 @@ async def history_events(
     return {"events": rows, "limit": limit, "offset": offset}
 
 
-@router.get("/api/history/stats")
+@router.get("/api/v1/history/stats")
 async def history_stats():
     return await persistence_service.get_stats()
 
 
-@router.get("/api/history/export")
+@router.get("/api/v1/history/export")
 async def history_export(
     format: str = Query("json", pattern="^(json|csv)$"),
     types: str = Query("observations,telemetry,events", description="Comma-separated export types"),

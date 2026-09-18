@@ -12,12 +12,12 @@ def get_recovery_service() -> FaultRecoveryService:
     return _recovery_service
 
 
-@router.get("/api/recovery/status")
+@router.get("/api/v1/recovery/status")
 async def get_recovery_status():
     return get_recovery_service().get_status()
 
 
-@router.post("/api/recovery/trigger")
+@router.post("/api/v1/recovery/trigger")
 async def trigger_recovery(payload: dict = Body(...)):
     action_str = payload.get("action", "")
     try:
@@ -29,7 +29,7 @@ async def trigger_recovery(payload: dict = Body(...)):
     return {"status": "ok", "event": evt.model_dump()}
 
 
-@router.post("/api/recovery/reset")
+@router.post("/api/v1/recovery/reset")
 async def reset_recovery():
     get_recovery_service().reset()
     return {"status": "ok"}

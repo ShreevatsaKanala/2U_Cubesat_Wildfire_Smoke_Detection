@@ -16,6 +16,17 @@ async def get_ground_station_config():
     return engine.ground_station.model_dump(mode="json")
 
 
+@router.get("/api/v1/ground-station/network")
+async def get_ground_station_network():
+    stations = ground_network_service.get_all_stations()
+    active_id = ground_network_service.get_active_station_id()
+    return {
+        "stations": [s.model_dump() for s in stations],
+        "active_station_id": active_id,
+        "network_id": ground_network_service.network.network_id,
+    }
+
+
 @router.get("/api/v1/ground-stations")
 async def list_ground_stations():
     stations = ground_network_service.get_all_stations()

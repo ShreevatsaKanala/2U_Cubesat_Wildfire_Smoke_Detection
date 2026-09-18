@@ -12,12 +12,12 @@ def get_thermal_model() -> ThermalModel:
     return _thermal_model
 
 
-@router.get("/api/thermal/status")
+@router.get("/api/v1/thermal/status")
 async def get_thermal_status():
     return get_thermal_model().get_status()
 
 
-@router.post("/api/thermal/reset")
+@router.post("/api/v1/thermal/reset")
 async def reset_thermal():
     get_thermal_model().reset()
     return {"status": "ok"}

@@ -28,6 +28,7 @@ from app.api.v1.thermal import router as thermal_router
 from app.api.v1.firms import router as firms_router
 from app.api.v1.correlation import router as correlation_router
 from app.api.v1.replay import router as replay_router
+from app.api.v1.export import router as export_router
 from app.core.database import init_db, close_db
 
 engine = SimulationEngine(sim_config={"ml_mode": settings.ML_MODE, "ai_mode": settings.AI_MODE})
@@ -168,6 +169,7 @@ app.include_router(thermal_router)
 app.include_router(firms_router)
 app.include_router(correlation_router)
 app.include_router(replay_router)
+app.include_router(export_router)
 
 data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 if os.path.exists(data_dir):

@@ -158,11 +158,13 @@ class ResourceMonitor:
             import psutil
             process = psutil.Process()
             mem_mb = process.memory_info().rss / (1024 * 1024)
-        except ImportError:
-            import resource
-            # ru_maxrss on Linux is bytes; on macOS is KB
-            usage = resource.getrusage(resource.RUSAGE_SELF)
-            mem_mb = usage.ru_maxrss / 1024
+        except (ImportError, Exception):
+            try:
+                import resource
+                usage = resource.getrusage(resource.RUSAGE_SELF)
+                mem_mb = usage.ru_maxrss / 1024
+            except (ImportError, Exception):
+                mem_mb = 0.0
         self._memory_samples.append((now, mem_mb))
         if len(self._memory_samples) > 60:
             self._memory_samples = self._memory_samples[-60:]
@@ -182,7 +184,7 @@ class ResourceMonitor:
             "queue_sizes": queues,
             "counters": dict(self._counters),
             "cache_ages_minutes": {
-                k: round(v, 1) if v is not None else None
+                k: round(self.get_cache_age_minutes(k), 1) if v is not None else None
                 for k, v in self._cache_timestamps.items()
             },
         }

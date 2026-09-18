@@ -14,12 +14,12 @@ def _get_firms():
     return _firms_adapter
 
 
-@router.get("/api/firms/status")
+@router.get("/api/v1/firms/status")
 async def firms_status():
     return _get_firms().get_status()
 
 
-@router.get("/api/firms/detections")
+@router.get("/api/v1/firms/detections")
 async def firms_detections(
     lat: float = Query(..., description="Latitude"),
     lon: float = Query(..., description="Longitude"),

@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-router = APIRouter(prefix="/api/tle", tags=["tle"])
+router = APIRouter(prefix="/api/v1/tle", tags=["tle"])
 
 
 @router.get("/status")

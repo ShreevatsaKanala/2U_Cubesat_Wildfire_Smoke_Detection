@@ -13,12 +13,12 @@ def _get_correlation_service():
     return _correlation_service
 
 
-@router.get("/api/correlation/status")
+@router.get("/api/v1/correlation/status")
 async def correlation_status():
     return _get_correlation_service().get_status()
 
 
-@router.post("/api/correlation/analyze/{observation_id}")
+@router.post("/api/v1/correlation/analyze/{observation_id}")
 async def analyze_observation(
     observation_id: str,
     radius_km: float = Query(50.0, description="Search radius in km"),
