@@ -91,9 +91,39 @@ export async function fetchGroundStationConfig() {
 
 export async function fetchDownlinkStatus() {
   return get<{
-    queue: { id: string; observation_id: string; size_bytes: number; priority: string; created_at: string; status: string }[];
+    queue_size: number;
     total_transmitted: number;
-    total_failed: number;
+    total_bytes: number;
+    effective_rate_bytes_s: number;
+    current_band: string;
+    progress: {
+      queued_count: number;
+      active_count: number;
+      completed_count: number;
+      total_queued_bytes: number;
+      total_active_bytes: number;
+      total_active_transferred: number;
+      total_completed_bytes: number;
+      overall_progress_pct: number;
+    };
+    items: {
+      observation_id: string;
+      priority: string;
+      image_size_bytes: number;
+      queued_at: string;
+      transmitted_at: string | null;
+      started_at: string | null;
+      paused_at: string | null;
+      status: string;
+      bytes_transmitted: number;
+      assigned_station: string | null;
+      pause_reason: string | null;
+      fail_reason: string | null;
+      resume_count: number;
+      progress_pct: number;
+      bytes_remaining: number;
+      eta_seconds: number;
+    }[];
   }>("/api/v1/downlink/status");
 }
 
@@ -200,7 +230,7 @@ export async function fetchAIStatus() {
     timeout_seconds: number;
     max_requests_per_minute: number;
     status: string;
-  }>("/api/ai/status");
+  }>("/api/v1/ai/status");
 }
 
 export async function fetchMLStatus() {
