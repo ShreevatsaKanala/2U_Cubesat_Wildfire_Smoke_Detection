@@ -53,6 +53,8 @@ class SentinelClient:
         lat: float,
         lon: float,
         datetime_str: str,
+        *,
+        metadata_only: bool = False,
     ) -> SentinelObservationResult:
         self._last_request = datetime.now(timezone.utc).isoformat()
 
@@ -95,6 +97,19 @@ class SentinelClient:
             )
 
         self._current_scene = scene_id
+        self._last_success = datetime.now(timezone.utc).isoformat()
+        self._last_error = None
+
+        if metadata_only:
+            return SentinelObservationResult(
+                observation_id=observation_id,
+                scene_id=scene_id,
+                acquisition_time=acquisition_time,
+                cloud_cover=cloud_cover,
+                aoi=bbox,
+                metadata={},
+                available=True,
+            )
 
         # auth
         token = await self._auth.get_token()
@@ -129,6 +144,47 @@ class SentinelClient:
             metadata={},
             available=True,
         )
+
+    async def get_image(
+        self,
+        observation_id: str,
+        product: str,
+        lat: float,
+        lon: float,
+        datetime_str: str,
+    ) -> str:
+        bbox = _make_bbox(lat, lon)
+
+        meta_key = ("meta", tuple(bbox), datetime_str)
+        cached_meta = self._cache.get_metadata(meta_key)
+        if cached_meta is not None:
+            scene_id = cached_meta.get("scene_id", "")
+        else:
+            dt_range = self._parse_datetime_range(datetime_str)
+            scenes = await self._catalog.search_scenes(
+                bbox=bbox,
+                datetime_range=dt_range,
+                max_cloud_cover=50.0,
+                max_results=5,
+            )
+            if not scenes:
+                return ""
+            scene_id = scenes[0].scene_id
+            self._cache.set_metadata(
+                meta_key,
+                {
+                    "scene_id": scene_id,
+                    "cloud_cover": scenes[0].cloud_cover,
+                    "acquisition_time": scenes[0].datetime.isoformat(),
+                },
+            )
+
+        token = await self._auth.get_token()
+        if not token:
+            self._last_error = "Authentication failed"
+            return ""
+
+        return await self._fetch_image(token, product, bbox, scene_id)
 
     async def _fetch_image(
         self, token: str, product: str, bbox: list[float], scene_id: str
