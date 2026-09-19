@@ -30,6 +30,7 @@ from app.api.v1.correlation import router as correlation_router
 from app.api.v1.replay import router as replay_router
 from app.api.v1.export import router as export_router
 from app.api.v1.demo import router as demo_router
+from app.api.v1.sentinel import router as sentinel_router
 from app.core.database import init_db, close_db
 
 engine = SimulationEngine(sim_config={"ml_mode": settings.ML_MODE, "ai_mode": settings.AI_MODE})
@@ -199,6 +200,7 @@ app.include_router(correlation_router)
 app.include_router(replay_router)
 app.include_router(export_router)
 app.include_router(demo_router)
+app.include_router(sentinel_router)
 
 data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 if os.path.exists(data_dir):

@@ -69,6 +69,11 @@ class Settings(BaseSettings):
     FIRMS_CACHE_MAX_AGE_MINUTES: int = 30
     TLE_CACHE_MAX_AGE_HOURS: int = 24
 
+    # Sentinel Hub / Copernicus
+    SH_CLIENT_ID: str = ""
+    SH_CLIENT_SECRET: str = ""
+    COPERNICUS_ENABLED: bool = False
+
     DEMO_MODE: bool = True
 
     model_config = SettingsConfigDict(

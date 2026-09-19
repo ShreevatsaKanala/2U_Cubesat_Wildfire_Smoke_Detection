@@ -11,6 +11,15 @@ export interface DemoObservation {
   status: string;
   visualEvidence: string[];
   alternativeExplanations: string[];
+
+  sentinelAvailable: boolean;
+  sentinelSceneId: string | null;
+  sentinelAcquisitionTime: string | null;
+  sentinelCloudCover: number | null;
+  sentinelProduct: string | null;
+  sentinelTrueColorUrl: string | null;
+  sentinelNdviUrl: string | null;
+  sentinelFalseColorUrl: string | null;
 }
 
 export interface DemoDownlinkItem {
@@ -720,6 +729,14 @@ export class DemoEngine {
       status: "CAPTURED",
       visualEvidence,
       alternativeExplanations,
+      sentinelAvailable: false,
+      sentinelSceneId: null,
+      sentinelAcquisitionTime: null,
+      sentinelCloudCover: null,
+      sentinelProduct: null,
+      sentinelTrueColorUrl: null,
+      sentinelNdviUrl: null,
+      sentinelFalseColorUrl: null,
     };
 
     this.state.observations.unshift(observation);

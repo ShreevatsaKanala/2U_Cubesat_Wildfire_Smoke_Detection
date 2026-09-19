@@ -8,6 +8,7 @@ interface AIVisionPanelProps {
 
 export default function AIVisionPanel({ state }: AIVisionPanelProps) {
   const ai = state?.ai;
+  const latestObs = state?.observations?.[0];
 
   if (!ai) {
     return (
@@ -33,7 +34,7 @@ export default function AIVisionPanel({ state }: AIVisionPanelProps) {
 
   return (
     <div className="panel space-y-2">
-      <h3 className="text-[10px] font-semibold text-mission-accent uppercase tracking-widest flex items-center gap-1.5">
+      <h3 className="text-[10px] font-semibold text-mission-accent uppercase tracking-widest">
         Vision AI
       </h3>
 
@@ -46,8 +47,8 @@ export default function AIVisionPanel({ state }: AIVisionPanelProps) {
           </div>
         </div>
         <div className="flex justify-between py-0.5">
-          <span className="text-[10px] text-slate-400 uppercase tracking-wider">Model</span>
-          <span className="text-[10px] font-mono text-slate-200">{ai.model}</span>
+          <span className="text-[10px] text-slate-400 uppercase tracking-wider">Mode</span>
+          <span className="text-[10px] font-mono text-slate-200">DEMO INFERENCE</span>
         </div>
         <div className="flex justify-between py-0.5">
           <span className="text-[10px] text-slate-400 uppercase tracking-wider">Latest</span>
@@ -73,6 +74,15 @@ export default function AIVisionPanel({ state }: AIVisionPanelProps) {
         <div className="flex justify-between py-0.5">
           <span className="text-[10px] text-slate-400 uppercase tracking-wider">Latency</span>
           <span className="text-[10px] font-mono text-slate-200">{ai.latencyMs.toFixed(2)}s</span>
+        </div>
+      </div>
+
+      <div className="border-t border-mission-border pt-2">
+        <div className="flex justify-between py-0.5">
+          <span className="text-[10px] text-slate-400 uppercase tracking-wider">Earth Observation</span>
+          <span className="text-[10px] font-mono text-mission-cyan">
+            {latestObs?.sentinelAvailable ? "SENTINEL-2 REFERENCE" : "SIMULATED CUBESAT"}
+          </span>
         </div>
       </div>
 

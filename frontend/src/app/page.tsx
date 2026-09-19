@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useDemoEngine } from "@/hooks/useDemoEngine";
 import MissionHeader from "@/components/MissionHeader";
@@ -13,6 +13,7 @@ import DownlinkQueuePanel from "@/components/DownlinkQueuePanel";
 import GroundStationStrip from "@/components/GroundStationStrip";
 import MissionEventsPanel from "@/components/MissionEventsPanel";
 import DemoControls from "@/components/DemoControls";
+import SentinelObservationOverlay from "@/components/SentinelObservationOverlay";
 
 const Globe = dynamic(() => import("@/components/Globe"), { ssr: false });
 
@@ -28,6 +29,21 @@ export default function MissionControl() {
     clearFaults,
   } = useDemoEngine();
 
+  const [activeOverlay, setActiveOverlay] = useState<any>(null);
+  const [lastObsCount, setLastObsCount] = useState(0);
+
+  useEffect(() => {
+    if (state?.observations && state.observations.length > lastObsCount && state.running) {
+      const newest = state.observations[0];
+      setActiveOverlay(newest);
+      setLastObsCount(state.observations.length);
+    }
+  }, [state?.observations?.length, state?.running, lastObsCount]);
+
+  const dismissOverlay = useCallback(() => {
+    setActiveOverlay(null);
+  }, []);
+
   return (
     <div className="h-screen flex flex-col overflow-hidden scanline">
       <MissionHeader state={state} />
@@ -42,6 +58,7 @@ export default function MissionControl() {
 
         <main className="flex-1 min-w-0 relative">
           <Globe demoState={state} />
+          <SentinelObservationOverlay observation={activeOverlay} onDismiss={dismissOverlay} />
         </main>
 
         <aside className="w-64 overflow-y-auto p-1.5 space-y-1.5 border-l border-mission-border bg-mission-dark/50 shrink-0 scrollbar-thin">
