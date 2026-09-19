@@ -1,7 +1,5 @@
 "use client";
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { useMissionStore } from "@/stores/telemetryStore";
-import { fetchHotspots } from "@/lib/api";
 import type { DemoState } from "@/lib/demoEngine";
 
 let Cesium: typeof import("cesium") | null = null;
@@ -14,10 +12,8 @@ const GROUND_STATIONS = [
   { name: "Punta Arenas", lat: -53.1638, lon: -70.9171, color: "#ef4444" },
 ];
 
-const ELEVATION_MASK_DEG = 10;
 const MAX_ORBITS_GROUND_TRACK = 2;
 const ORBIT_PERIOD_S = 5400;
-const FIRMS_CLUSTER_THRESHOLD = 50;
 
 interface HotspotData {
   lat: number;
@@ -31,9 +27,40 @@ interface GlobeProps {
   demoState?: DemoState | null;
 }
 
+function computeOrbitPath(lat: number, lon: number, altKm: number, C: typeof import("cesium")): import("cesium").Cartesian3[] {
+  const points: import("cesium").Cartesian3[] = [];
+  const period = 90 * 60;
+  const steps = 120;
+
+  for (let i = 0; i < steps; i++) {
+    const t = (i / steps) * period;
+    const angle = (t / period) * 360;
+    const latRad = (lat * Math.PI) / 180;
+    const angleRad = (angle * Math.PI) / 180;
+    const orbitLat = Math.asin(Math.sin(latRad) * Math.cos(angleRad));
+    const orbitLon = (lon * Math.PI) / 180 + Math.atan2(Math.sin(angleRad) * Math.cos(latRad), Math.cos(angleRad));
+    points.push(C.Cartesian3.fromDegrees((orbitLon * 180) / Math.PI, (orbitLat * 180) / Math.PI, altKm * 1000));
+  }
+  return points;
+}
+
+function computeCameraFootprint(lat: number, lon: number, altKm: number, C: typeof import("cesium")): { positions: import("cesium").Cartesian3[] } | undefined {
+  const fov = 15;
+  const radius = altKm * Math.tan((fov * Math.PI) / 180);
+  const distDeg = (radius / 111) * 2;
+  return {
+    positions: [
+      C.Cartesian3.fromDegrees(lon - distDeg / 2, lat - distDeg / 2, 0),
+      C.Cartesian3.fromDegrees(lon + distDeg / 2, lat - distDeg / 2, 0),
+      C.Cartesian3.fromDegrees(lon + distDeg / 2, lat + distDeg / 2, 0),
+      C.Cartesian3.fromDegrees(lon - distDeg / 2, lat + distDeg / 2, 0),
+    ],
+  };
+}
+
 export default function Globe({ demoState }: GlobeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const viewerRef = useRef<InstanceType<typeof import("cesium").Viewer> | null>(null);
+  const viewerRef = useRef<any>(null);
   const satelliteEntityRef = useRef<any>(null);
   const groundTrackRef = useRef<any>(null);
   const orbitPathRef = useRef<any>(null);
@@ -42,33 +69,18 @@ export default function Globe({ demoState }: GlobeProps) {
   const hotspotsEntitiesRef = useRef<any[]>([]);
   const groundStationEntitiesRef = useRef<any[]>([]);
   const visibilityCircleEntitiesRef = useRef<any[]>([]);
-  const trackPointsRef = useRef<import("cesium").Cartesian3[]>([]);
+  const trackPointsRef = useRef<any[]>([]);
   const trackIndexRef = useRef(0);
-  const prevCamPosRef = useRef<import("cesium").Cartesian3 | null>(null);
+  const prevCamPosRef = useRef<any>(null);
   const initializedRef = useRef(false);
   const userInteractingRef = useRef(false);
   const lastUserInteractionRef = useRef(0);
-  const selectedFirmsRef = useRef<string | null>(null);
-
-  const telemetry = useMissionStore((s) => s.telemetry);
-  const globeView = useMissionStore((s) => s.globeView);
   const [cesiumLoaded, setCesiumLoaded] = useState(false);
-  const [hotspots, setHotspots] = useState<HotspotData[]>([]);
   const [selectedFirms, setSelectedFirms] = useState<HotspotData | null>(null);
 
-  // Derive position from demo state or store telemetry
   const pos = demoState
     ? { latitude: demoState.spacecraft.latitude, longitude: demoState.spacecraft.longitude, altitude_km: demoState.spacecraft.altitudeKm }
-    : telemetry?.position ?? null;
-
-  useEffect(() => {
-    if (demoState) return; // Demo mode: no API calls for hotspots
-    fetchHotspots().then(setHotspots).catch(() => {});
-    const id = setInterval(() => {
-      fetchHotspots().then(setHotspots).catch(() => {});
-    }, 60000);
-    return () => clearInterval(id);
-  }, [demoState]);
+    : null;
 
   const trackUserInteraction = useCallback((viewer: any) => {
     const handler = () => {
@@ -183,7 +195,7 @@ export default function Globe({ demoState }: GlobeProps) {
         polyline: {
           positions: new Cesium.CallbackProperty(() => {
             if (!Cesium || !pos) return [];
-            return computeOrbitPath(pos?.latitude, pos?.longitude, pos?.altitude_km);
+            return computeOrbitPath(pos.latitude, pos.longitude, pos.altitude_km, Cesium);
           }, false),
           width: 1.5,
           material: new Cesium.PolylineDashMaterialProperty({ color: Cesium.Color.CYAN.withAlpha(0.3), dashLength: 16 }),
@@ -195,7 +207,7 @@ export default function Globe({ demoState }: GlobeProps) {
         polygon: {
           hierarchy: new Cesium.CallbackProperty(() => {
             if (!Cesium || !pos) return undefined;
-            return computeCameraFootprint(pos?.latitude, pos?.longitude, pos?.altitude_km);
+            return computeCameraFootprint(pos.latitude, pos.longitude, pos.altitude_km, Cesium);
           }, false),
           material: Cesium.Color.YELLOW.withAlpha(0.12),
           outline: true,
@@ -249,7 +261,7 @@ export default function Globe({ demoState }: GlobeProps) {
           });
           groundStationEntitiesRef.current.push(entity);
 
-          const circlePositions: import("cesium").Cartesian3[] = [];
+          const circlePositions: any[] = [];
           const circleSteps = 64;
           const circleRadiusDeg = 5;
           for (let i = 0; i <= circleSteps; i++) {
@@ -316,20 +328,18 @@ export default function Globe({ demoState }: GlobeProps) {
       trackIndexRef.current = Math.max(0, trackIndexRef.current - 1);
     }
 
-    if (!userInteractingRef.current && (globeView === "follow" || globeView === "top-down")) {
-      const distance = globeView === "top-down" ? pos.altitude_km * 1000 + 2000000 : pos.altitude_km * 1000 + 5000000;
-      const pitch = globeView === "top-down" ? -Math.PI / 2 : -Math.PI / 3;
+    if (!userInteractingRef.current) {
       viewer.camera.flyTo({
         destination: Cesium.Cartesian3.fromDegrees(
           pos.longitude,
           pos.latitude,
-          distance
+          pos.altitude_km * 1000 + 5000000
         ),
-        orientation: { heading: 0, pitch, roll: 0 },
+        orientation: { heading: 0, pitch: -Math.PI / 3, roll: 0 },
         duration: 0.3,
       });
     }
-  }, [pos, globeView]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pos]);
 
   useEffect(() => {
     if (!viewerRef.current || !Cesium) return;
@@ -339,55 +349,34 @@ export default function Globe({ demoState }: GlobeProps) {
     hotspotsEntitiesRef.current.forEach((e) => viewer.entities.remove(e));
     hotspotsEntitiesRef.current = [];
 
-    if (hotspots.length > FIRMS_CLUSTER_THRESHOLD) {
-      const clusterEntity = viewer.entities.add({
-        position: C.Cartesian3.fromDegrees(0, 20, 0),
-        billboard: {
-          image: "data:image/svg+xml;base64," + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#ef4444" opacity="0.8"/><text x="12" y="16" text-anchor="middle" fill="white" font-size="10" font-family="monospace">' + hotspots.length + "</text></svg>"),
-          verticalOrigin: C.VerticalOrigin.CENTER,
+    const hotspots: HotspotData[] = Array.isArray(demoState?.hotspots) ? demoState!.hotspots : [];
+
+    hotspots.forEach((h) => {
+      const entity = viewer.entities.add({
+        position: C.Cartesian3.fromDegrees(h.lon, h.lat, 0),
+        point: {
+          pixelSize: Math.min(4 + h.frp / 10, 12),
+          color: h.frp > 50 ? C.Color.RED : C.Color.ORANGE,
+          outlineColor: C.Color.YELLOW,
+          outlineWidth: 1,
           heightReference: C.HeightReference.CLAMP_TO_GROUND,
         },
         label: {
-          text: hotspots.length + " fire detections",
-          font: "10px monospace",
+          text: `FRP: ${h.frp.toFixed(0)} MW`,
+          font: "9px monospace",
           fillColor: C.Color.WHITE,
           style: C.LabelStyle.FILL_AND_OUTLINE,
           outlineWidth: 1,
           verticalOrigin: C.VerticalOrigin.BOTTOM,
-          pixelOffset: new C.Cartesian2(0, -16),
+          pixelOffset: new C.Cartesian2(0, -10),
           showBackground: true,
           backgroundColor: C.Color.fromCssColorString("#7f1d1dcc"),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       });
-      hotspotsEntitiesRef.current.push(clusterEntity);
-    } else {
-      hotspots.forEach((h, idx) => {
-        const entity = viewer.entities.add({
-          position: C.Cartesian3.fromDegrees(h.lon, h.lat, 0),
-          point: {
-            pixelSize: Math.min(4 + h.frp / 10, 12),
-            color: h.frp > 50 ? C.Color.RED : C.Color.ORANGE,
-            outlineColor: C.Color.YELLOW,
-            outlineWidth: 1,
-            heightReference: C.HeightReference.CLAMP_TO_GROUND,
-          },
-          label: {
-            text: `FRP: ${h.frp.toFixed(0)} MW`,
-            font: "9px monospace",
-            fillColor: C.Color.WHITE,
-            style: C.LabelStyle.FILL_AND_OUTLINE,
-            outlineWidth: 1,
-            verticalOrigin: C.VerticalOrigin.BOTTOM,
-            pixelOffset: new C.Cartesian2(0, -10),
-            showBackground: true,
-            backgroundColor: C.Color.fromCssColorString("#7f1d1dcc"),
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          },
-        });
-        (entity as any)._hotspotData = h;
-        hotspotsEntitiesRef.current.push(entity);
-      });
-    }
+      (entity as any)._hotspotData = h;
+      hotspotsEntitiesRef.current.push(entity);
+    });
 
     const handler = new C.ScreenSpaceEventHandler(viewer.scene.canvas);
     handler.setInputAction((click: any) => {
@@ -402,7 +391,7 @@ export default function Globe({ demoState }: GlobeProps) {
         });
       }
     }, C.ScreenSpaceEventType.LEFT_CLICK);
-  }, [hotspots]);
+  }, [demoState?.hotspots]);
 
   return (
     <div className="relative w-full h-full">
@@ -419,8 +408,8 @@ export default function Globe({ demoState }: GlobeProps) {
             <button onClick={() => setSelectedFirms(null)} className="text-slate-500 hover:text-slate-300 text-xs">&times;</button>
           </div>
           <div className="space-y-0.5 text-[10px] font-mono">
-            <div className="flex justify-between"><span className="text-slate-400">Lat</span><span className="text-slate-200">{selectedFirms.lat.toFixed(4)}°</span></div>
-            <div className="flex justify-between"><span className="text-slate-400">Lon</span><span className="text-slate-200">{selectedFirms.lon.toFixed(4)}°</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">Lat</span><span className="text-slate-200">{selectedFirms.lat.toFixed(4)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">Lon</span><span className="text-slate-200">{selectedFirms.lon.toFixed(4)}</span></div>
             <div className="flex justify-between"><span className="text-slate-400">FRP</span><span className="text-red-400 font-bold">{selectedFirms.frp.toFixed(1)} MW</span></div>
             <div className="flex justify-between"><span className="text-slate-400">Confidence</span><span className="text-slate-200">{selectedFirms.confidence}</span></div>
           </div>
@@ -428,43 +417,4 @@ export default function Globe({ demoState }: GlobeProps) {
       )}
     </div>
   );
-}
-
-function computeOrbitPath(lat: number, lon: number, altKm: number): import("cesium").Cartesian3[] {
-  if (typeof window === "undefined") return [];
-  const Cesium = (window as any).Cesium;
-  if (!Cesium) return [];
-
-  const points: import("cesium").Cartesian3[] = [];
-  const period = 90 * 60;
-  const steps = 120;
-  const stepSize = period / steps;
-
-  for (let i = 0; i < steps; i++) {
-    const t = (i / steps) * period;
-    const angle = (t / period) * 360;
-    const latRad = (lat * Math.PI) / 180;
-    const lonRad = (lon * Math.PI) / 180;
-    const orbitLat = Math.asin(Math.sin(latRad) * Math.cos((angle * Math.PI) / 180) + Math.cos(latRad) * Math.sin((angle * Math.PI) / 180) * 0);
-    const orbitLon = lonRad + Math.atan2(Math.sin((angle * Math.PI) / 180) * Math.cos(latRad), Math.cos((angle * Math.PI) / 180));
-    points.push(Cesium.Cartesian3.fromDegrees((orbitLon * 180) / Math.PI, (orbitLat * 180) / Math.PI, altKm * 1000));
-  }
-  return points;
-}
-
-function computeCameraFootprint(lat: number, lon: number, altKm: number): { positions: import("cesium").Cartesian3[] } | undefined {
-  if (typeof window === "undefined") return undefined;
-  const Cesium = (window as any).Cesium;
-  if (!Cesium) return undefined;
-
-  const fov = 15;
-  const radius = altKm * Math.tan((fov * Math.PI) / 180);
-  const distDeg = (radius / 111) * 2;
-  const corners = [
-    Cesium.Cartesian3.fromDegrees(lon - distDeg / 2, lat - distDeg / 2, 0),
-    Cesium.Cartesian3.fromDegrees(lon + distDeg / 2, lat - distDeg / 2, 0),
-    Cesium.Cartesian3.fromDegrees(lon + distDeg / 2, lat + distDeg / 2, 0),
-    Cesium.Cartesian3.fromDegrees(lon - distDeg / 2, lat + distDeg / 2, 0),
-  ];
-  return { positions: corners };
 }

@@ -2,25 +2,22 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { DemoEngine, type DemoState } from "@/lib/demoEngine";
 
-export function useDemoEngine() {
-  const engineRef = useRef<DemoEngine | null>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const [state, setState] = useState<DemoState | null>(null);
+const initialEngine = new DemoEngine();
+const initialState: DemoState = initialEngine.getState();
 
-  if (!engineRef.current) {
-    engineRef.current = new DemoEngine();
-  }
+export function useDemoEngine() {
+  const engineRef = useRef<DemoEngine>(initialEngine);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [state, setState] = useState<DemoState>(initialState);
 
   const tick = useCallback(() => {
     const engine = engineRef.current;
-    if (!engine) return;
     engine.tick();
     setState({ ...engine.getState() });
   }, []);
 
   const start = useCallback(() => {
     const engine = engineRef.current;
-    if (!engine) return;
     engine.start();
     setState({ ...engine.getState() });
     if (!intervalRef.current) {
@@ -30,7 +27,6 @@ export function useDemoEngine() {
 
   const pause = useCallback(() => {
     const engine = engineRef.current;
-    if (!engine) return;
     engine.pause();
     setState({ ...engine.getState() });
     if (intervalRef.current) {
@@ -40,42 +36,33 @@ export function useDemoEngine() {
   }, []);
 
   const reset = useCallback(() => {
-    const engine = engineRef.current;
-    if (!engine) return;
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
+    const engine = engineRef.current;
     engine.reset();
     setState({ ...engine.getState() });
   }, []);
 
   const setSpeed = useCallback((speed: number) => {
-    const engine = engineRef.current;
-    if (!engine) return;
-    engine.setSpeed(speed);
-    setState({ ...engine.getState() });
+    engineRef.current.setSpeed(speed);
+    setState({ ...engineRef.current.getState() });
   }, []);
 
   const setScenario = useCallback((scenario: string) => {
-    const engine = engineRef.current;
-    if (!engine) return;
-    engine.setScenario(scenario);
-    setState({ ...engine.getState() });
+    engineRef.current.setScenario(scenario);
+    setState({ ...engineRef.current.getState() });
   }, []);
 
   const injectFault = useCallback((type: "commLoss" | "lowBattery" | "thermalWarning") => {
-    const engine = engineRef.current;
-    if (!engine) return;
-    engine.injectFault(type);
-    setState({ ...engine.getState() });
+    engineRef.current.injectFault(type);
+    setState({ ...engineRef.current.getState() });
   }, []);
 
   const clearFaults = useCallback(() => {
-    const engine = engineRef.current;
-    if (!engine) return;
-    engine.clearFaults();
-    setState({ ...engine.getState() });
+    engineRef.current.clearFaults();
+    setState({ ...engineRef.current.getState() });
   }, []);
 
   useEffect(() => {

@@ -132,6 +132,14 @@ export interface DemoState {
 
   events: DemoEvent[];
 
+  hotspots: Array<{
+    lat: number;
+    lon: number;
+    frp: number;
+    confidence: string;
+    id: string;
+  }>;
+
   faults: {
     commLoss: boolean;
     lowBattery: boolean;
@@ -293,6 +301,11 @@ export class DemoEngine {
       },
       groundStations: GROUND_STATIONS.map((gs) => ({ ...gs })),
       events: [],
+      hotspots: [
+        { id: "FIRE-001", lat: 37.75, lon: -122.42, frp: 45.2, confidence: "nominal" },
+        { id: "FIRE-002", lat: 34.05, lon: -118.24, frp: 82.1, confidence: "high" },
+        { id: "FIRE-003", lat: 36.17, lon: -115.14, frp: 28.7, confidence: "low" },
+      ],
       faults: {
         commLoss: false,
         lowBattery: false,
@@ -392,6 +405,7 @@ export class DemoEngine {
     this.updateGroundStations();
     this.processDownlink(elapsedIncrement);
     this.checkObservations();
+    this.updateHotspots();
     this.pruneEvents();
   }
 
@@ -615,6 +629,34 @@ export class DemoEngine {
           : 0,
     };
     this.state.downlink.totalBytes = this.state.downlink.totalTransmitted * 2048000;
+  }
+
+  private updateHotspots(): void {
+    if (this.tickCount % 10 !== 0) return;
+
+    const scenario = this.state.scenario;
+    const scLat = this.state.spacecraft.latitude;
+    const scLon = this.state.spacecraft.longitude;
+
+    if (scenario === "WILDFIRE" || scenario === "HIGH PRIORITY") {
+      const clusterLat = scLat + (seededRandom(this.tickCount) - 0.5) * 10;
+      const clusterLon = scLon + (seededRandom(this.tickCount + 1) - 0.5) * 10;
+      const count = scenario === "HIGH PRIORITY" ? 5 : 3;
+      this.state.hotspots = [];
+      for (let i = 0; i < count; i++) {
+        this.state.hotspots.push({
+          id: `FIRE-${String(i + 1).padStart(3, "0")}`,
+          lat: clusterLat + (seededRandom(this.tickCount + i * 2) - 0.5) * 4,
+          lon: clusterLon + (seededRandom(this.tickCount + i * 2 + 1) - 0.5) * 4,
+          frp: parseFloat((30 + seededRandom(this.tickCount + i * 3) * 120).toFixed(1)),
+          confidence: seededRandom(this.tickCount + i * 4) > 0.5 ? "high" : "nominal",
+        });
+      }
+    } else {
+      this.state.hotspots = [
+        { id: "FIRE-001", lat: 37.75 + (seededRandom(this.tickCount) - 0.5) * 2, lon: -122.42 + (seededRandom(this.tickCount + 5) - 0.5) * 2, frp: parseFloat((10 + seededRandom(this.tickCount + 6) * 40).toFixed(1)), confidence: "low" },
+      ];
+    }
   }
 
   private checkObservations(): void {
